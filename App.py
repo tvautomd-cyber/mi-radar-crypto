@@ -5,7 +5,7 @@ import requests
 st.set_page_config(page_title="QUANTUM SOLANA MULTI-VECTOR V4", layout="vertical")
 
 # --- CONFIGURACIÓN DE TU TELEGRAM ---
-# 👇 BORRA EL TEXTO DE ABAJO Y PEGA TU TOKEN DE BOTFATHER (Deja las comillas)
+# 👇 Pon tu Token de BotFather entre las comillas
 TELEGRAM_TOKEN = "8951377031:AAEMQ7r94hDKcgn6sEEXZasFKjvnvze3nyc"
 
 # Estilos Core Dark Hacker y Matrix adaptados a CryptoPanic
@@ -116,4 +116,4 @@ if st.button("⚡ DETONAR ALERTA GLOBAL DE PRUEBA"):
             st.success("¡Mensaje enviado! Revisa tu Telegram.")
         except Exception:
             st.warning("Pulsa 'Iniciar' dentro de tu bot de Telegram primero y vuelve a intentarlo.")
-          
+            
