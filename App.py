@@ -116,7 +116,7 @@ for n in noticias_pool:
     </div>
     """, unsafe_allow_html=True)
 
-# --- BOTÓN INTERACTIVO CORREGIDO AL 100% ---
+# --- BOTÓN INTERACTIVO COMPLETAMENTE SANEADO ---
 if st.button("⚡ DETONAR ALERTA GLOBAL DE PRUEBA"):
     try:
         msg = f"🚨 [ALERTA COMPLETA SOLANA] 🚨\n\n¡Análisis Matrix completado!\nConsenso de Red: ¡NO ES MALA IDEA COMPRAR!\n\nChances de Subida SOL: {prob_subir_sol}%\nFuerza Bots: {bots_long}% Longs\n\nVariables analizadas:\n- SEC Pro-ETFs (+40)\n- Pánico Robo Exchange (-32)\n- Geopolítica Trump (+15)."
