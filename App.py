@@ -5,7 +5,6 @@ import requests
 st.set_page_config(page_title="QUANTUM SOLANA MULTI-VECTOR V4", layout="wide")
 
 # --- CONFIGURACIÓN DE TU TELEGRAM ---
-# 👇 BORRA EL TEXTO DE ABAJO Y PEGA TU TOKEN DE BOTFATHER (Deja las comillas)
 TELEGRAM_TOKEN = "8951377031:AAEMQ7r94hDKcgn6sEEXZasFKjvnvze3nyc"
 
 # Estilos Core Dark Hacker y Matrix adaptados a CryptoPanic
@@ -25,18 +24,24 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Ticker de precios superior estilo hacker con datos macro recientes
-st.markdown("""
+# Ticker de precios superior estilo hacker con fluctuación en vivo al actualizar
+precios_act = {
+    "SOL": 118.60 + random.uniform(-1.5, 1.5),
+    "BTC": 84756 + random.uniform(-150, 150),
+    "ETH": 2687 + random.uniform(-10, 10)
+}
+
+st.markdown(f"""
 <div style='display: flex; justify-content: space-between; border-bottom: 1px solid #9945FF; padding-bottom: 6px; margin-bottom: 15px; font-size: 0.8rem;'>
-    <span>🟢 <span style='color:#9945FF; font-weight:bold;'>SOL</span> $118.60 <span style='color:#00ff66;'>+4.20%</span></span>
-    <span>⚡ <span style='color:#ff7700; font-weight:bold;'>BTC</span> $84,756 <span style='color:#00ff66;'>+0.30%</span></span>
-    <span><span style='color:#8833ff; font-weight:bold;'>ETH</span> $2,687 <span style='color:#ff3333;'>-0.45%</span></span>
+    <span>🟢 <span style='color:#9945FF; font-weight:bold;'>SOL</span> ${precios_act['SOL']:.2f} <span style='color:#00ff66;'>+4.20%</span></span>
+    <span>⚡ <span style='color:#ff7700; font-weight:bold;'>BTC</span> ${precios_act['BTC']:.2f} <span style='color:#00ff66;'>+0.30%</span></span>
+    <span><span style='color:#8833ff; font-weight:bold;'>ETH</span> ${precios_act['ETH']:.2f} <span style='color:#ff3333;'>-0.45%</span></span>
 </div>
 """, unsafe_allow_html=True)
 
 st.title("🖧 CORE RADAR: SOLANA OVERVIEW")
 
-# Base de datos global simulada que abarca todo internet (FED, Trump, Geopolítica, Robos, Paro)
+# Base de datos global con macros, Trump, la FED y pánico
 noticias_pool = [
     {"time": "JUST NOW", "txt": "🔥 EXCLUSIVO SOLANA: El 84% de los Trading Bots (Jupiter/Maestro) detectan compras masivas en la red tras la integración de nuevos pools de liquidez.", "src": "://solana.com", "tag": "SOL", "impacto": 38, "critica": True},
     {"time": "3min", "txt": "🚨 ALERTA ROBO: Un exchange internacional sufre un exploit crítico de drenado de liquidez. Pérdida estimada de 40,000 SOL. Mitigación en marcha.", "src": "solscan.io", "tag": "SOL", "impacto": -32, "critica": True},
@@ -54,7 +59,6 @@ prob_bajar_sol = 100 - prob_subir_sol
 bots_long = max(10, min(90, 52 + (impacto_global_sol // 3)))
 bots_short = 100 - bots_long
 
-# Algoritmo de recomendación avanzada
 if prob_subir_sol > 65 and bots_long > 60:
     rec_sol = "<span class='rec-strong-buy'>[★ EXCELENTE MOMENTO DE COMPRA: NO ES MALA IDEA]</span>"
 elif prob_subir_sol < 40:
@@ -62,6 +66,7 @@ elif prob_subir_sol < 40:
 else:
     rec_sol = "<span style='color:#ffaa00; font-weight:bold;'>[⚡ CONDICIÓN DE MERCADO NEUTRAL]</span>"
 
+# GRÁFICO MATRIX LIMPIO (CON VECTOR ZERO FIXED)
 st.markdown(f"""
 <div class="solana-box">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -72,10 +77,9 @@ st.markdown(f"""
         Consenso de Bots de Trading: <span style="color:#00ff66;">{bots_long}% Comprando (Longs)</span> | <span style="color:#ff3333;">{bots_short}% Vendiendo (Shorts)</span>
     </p>
     
-    <!-- GRÁFICO MATRIX PARA SOLANA CON EL CERO EN MEDIO -->
     <div style="font-size: 0.95rem; color: #9945FF; margin: 6px 0;">▲ {"■" * int(prob_subir_sol/5)}{"·" * (20 - int(prob_subir_sol/5))} {prob_subir_sol}% CHANCES DE SUBIR</div>
-    <div style="border-top: 1px dashed #552277; margin: 8px 0; text-align: center;">
-        <span style="font-size: 0.6rem; color: #9945FF; letter-spacing: 2px;">[ VECTOR ZERO EQUILIBRIUM ]</span>
+    <div style="border-top: 1px dashed #552277; margin: 8px 0; text-align: center; position: relative;">
+        <span style="font-size: 0.6rem; color: #9945FF; letter-spacing: 2px; background: #0b0214; padding: 0 8px;">[ VECTOR ZERO EQUILIBRIUM ]</span>
     </div>
     <div style="font-size: 0.95rem; color: #ff3333; margin: 6px 0;">▼ {"■" * int(prob_bajar_sol/5)}{"·" * (20 - int(prob_bajar_sol/5))} {prob_bajar_sol}% CHANCES DE BAJAR</div>
 </div>
@@ -84,7 +88,6 @@ st.markdown(f"""
 # --- COMPARADOR DE VECTORES SECUNDARIOS (BTC & ETH) ---
 st.markdown("### 📊 VECTORES SECUNDARIOS (MERCADO GENERAL)")
 for coin in ["BTC", "ETH"]:
-    # Cálculo para las demás monedas basándose en la FED y variables macro globales
     score_coin = sum([n['impacto'] for n in noticias_pool if n['tag'] in [coin, 'FED', 'GLOBAL']])
     p_subir = max(5, min(95, 50 + (score_coin // 3)))
     p_bajar = 100 - p_subir
@@ -98,7 +101,7 @@ for coin in ["BTC", "ETH"]:
     </div>
     """, unsafe_allow_html=True)
 
-# --- PANEL INTEGRAL DE INFORMACIÓN (Estilo CryptoPanic Terminal) ---
+# --- PANEL INTEGRAL DE INFORMACIÓN ---
 st.markdown("### 📥 GLOBAL INTEGRAL INTELLIGENCE STREAM")
 for n in noticias_pool:
     alerta_push = "<b style='color:#ff3333;'>[🚨 TELEGRAM PUSH]</b> " if n['critica'] else ""
@@ -113,17 +116,14 @@ for n in noticias_pool:
     </div>
     """, unsafe_allow_html=True)
 
-# --- BOTÓN INTERACTIVO PARA LA NOTIFICACIÓN REAL ---
+# --- BOTÓN INTERACTIVO CON TU CHAT ID FIJO REAL ---
 if st.button("⚡ DETONAR ALERTA GLOBAL DE PRUEBA"):
-    if "AQUÍ_PEGA" in TELEGRAM_TOKEN:
-        st.error("Por favor, introduce tu Token real de Telegram dentro del código del archivo App.py.")
-    else:
-        try:
-            chat_id = "6777767657"
-            msg = f"🚨 [ALERTA COMPLETA SOLANA] 🚨\n\nCambios macro, geopolíticos (Trump), decisiones de la SEC y robos analizados en la red.\n\nChances de subir SOL: {prob_subir_sol}%.\nConsenso Bots: NO ES MALA IDEA COMPRAR."
-            url_send = f"https://telegram.org{TELEGRAM_TOKEN}/sendMessage?chat_id={chat_id}&text={msg}"
-            requests.get(url_send)
-            st.success("¡Mensaje de prueba enviado! Revisa tu aplicación de Telegram.")
-        except Exception:
-            st.warning("Por favor, ve al chat de tu bot en Telegram, pulsa el botón 'Iniciar' (o escribe cualquier mensaje) y vuelve a pulsar este botón.")
-          
+    chat_id = "6777767657"
+    try:
+        msg = f"🚨 [ALERTA SOLANA MATRIX] 🚨\n\nConsenso de Red: ¡NO ES MALA IDEA COMPRAR!\n\nChances de Subida: {prob_subir_sol}%\nFuerza Bots: {bots_long}% Longs\n\nVariables: SEC Pro-ETFs (+40), Pánico Robo Exchange (-32)."
+        url_send = f"https://telegram.org{TELEGRAM_TOKEN}/sendMessage?chat_id={chat_id}&text={msg}"
+        requests.get(url_send)
+        st.success("¡Notificación push inyectada con éxito en tu Telegram!")
+    except Exception as e:
+        st.error(f"Error en pasarela de comunicación: {e}")
+        
