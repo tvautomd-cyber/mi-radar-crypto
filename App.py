@@ -119,9 +119,7 @@ if st.button("⚡ DETONAR ALERTA GLOBAL DE PRUEBA"):
         st.error("Por favor, introduce tu Token real de Telegram dentro del código del archivo App.py.")
     else:
         try:
-            url_updates = f"https://telegram.org{TELEGRAM_TOKEN}/getUpdates"
-            res = requests.get(url_updates).json()
-            chat_id = res['result'][-1]['message']['chat']['id']
+            chat_id = "6777767657"
             msg = f"🚨 [ALERTA COMPLETA SOLANA] 🚨\n\nCambios macro, geopolíticos (Trump), decisiones de la SEC y robos analizados en la red.\n\nChances de subir SOL: {prob_subir_sol}%.\nConsenso Bots: NO ES MALA IDEA COMPRAR."
             url_send = f"https://telegram.org{TELEGRAM_TOKEN}/sendMessage?chat_id={chat_id}&text={msg}"
             requests.get(url_send)
