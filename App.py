@@ -2,7 +2,7 @@ import streamlit as st
 import random
 import requests
 
-st.set_page_config(page_title="QUANTUM SOLANA MULTI-VECTOR V4", layout="vertical")
+st.set_page_config(page_title="QUANTUM SOLANA MULTI-VECTOR V4", layout="wide")
 
 # --- CONFIGURACIÓN DE TU TELEGRAM ---
 # 👇 BORRA EL TEXTO DE ABAJO Y PEGA TU TOKEN DE BOTFATHER (Deja las comillas)
