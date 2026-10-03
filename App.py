@@ -3,8 +3,10 @@ import requests
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from urllib.parse import quote
+
 
 # ============================================================
 # QUANTUM SOLANA INTELLIGENCE TERMINAL
@@ -18,8 +20,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+
 # ============================================================
-# CONFIG
+# SECRETS
 # ============================================================
 
 TELEGRAM_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
@@ -29,24 +32,39 @@ TELEGRAM_USERNAME = st.secrets.get(
     "Mycrypto_best_bot"
 )
 
-COINGECKO = "https://api.coingecko.com/api/v3"
-FEAR_GREED = "https://api.alternative.me/fng/"
-BINANCE = "https://api.binance.com/api/v3"
+
+# ============================================================
+# API
+# ============================================================
+
+COINGECKO_URL = "https://api.coingecko.com/api/v3"
+BINANCE_URL = "https://api.binance.com/api/v3"
+FEAR_GREED_URL = "https://api.alternative.me/fng/"
+
 
 # ============================================================
 # STYLE
 # ============================================================
 
-st.markdown("""
+st.markdown(
+    """
 <style>
 
 .stApp {
     background:
-        radial-gradient(circle at top right, rgba(120,40,255,.08), transparent 35%),
-        radial-gradient(circle at bottom left, rgba(0,255,170,.04), transparent 30%),
+        radial-gradient(
+            circle at 85% 5%,
+            rgba(120, 40, 255, 0.12),
+            transparent 32%
+        ),
+        radial-gradient(
+            circle at 10% 90%,
+            rgba(0, 255, 160, 0.05),
+            transparent 30%
+        ),
         #050607;
-    color: #d5d5d5;
-    font-family: "Consolas", "Courier New", monospace;
+    color: #d6d6d6;
+    font-family: Consolas, "Courier New", monospace;
 }
 
 header[data-testid="stHeader"] {
@@ -54,26 +72,26 @@ header[data-testid="stHeader"] {
 }
 
 .block-container {
+    max-width: 1650px;
     padding-top: 1.2rem;
-    max-width: 1600px;
 }
 
 h1, h2, h3 {
-    font-family: "Consolas", monospace !important;
-    letter-spacing: 1px;
+    font-family: Consolas, "Courier New", monospace !important;
 }
 
 .quantum-title {
-    font-size: 2.0rem;
-    font-weight: 800;
+    font-size: 2.15rem;
+    font-weight: 900;
     letter-spacing: 4px;
     color: #ffffff;
 }
 
 .quantum-subtitle {
-    color: #777;
+    margin-top: 4px;
+    color: #686868;
     letter-spacing: 2px;
-    font-size: .72rem;
+    font-size: 0.70rem;
 }
 
 .live {
@@ -82,30 +100,40 @@ h1, h2, h3 {
 }
 
 .panel {
-    background: linear-gradient(145deg, #0b0d10, #08090b);
+    background: linear-gradient(
+        145deg,
+        #0b0d10,
+        #08090b
+    );
     border: 1px solid #1d2026;
     border-radius: 8px;
-    padding: 18px;
+    padding: 17px;
     margin-bottom: 14px;
-    box-shadow: 0 0 20px rgba(0,0,0,.25);
+    box-shadow: 0 0 25px rgba(0, 0, 0, 0.28);
 }
 
 .panel-purple {
-    border: 1px solid #5f2b9e;
-    box-shadow: 0 0 25px rgba(120,40,255,.10);
+    border: 1px solid #5c2695;
+    box-shadow: 0 0 25px rgba(130, 50, 255, 0.10);
 }
 
 .metric-label {
-    color: #707070;
-    font-size: .68rem;
-    letter-spacing: 1.5px;
+    color: #666b72;
+    font-size: 0.66rem;
+    letter-spacing: 1.6px;
 }
 
 .metric-value {
-    color: #fff;
+    color: #ffffff;
     font-size: 1.35rem;
     font-weight: bold;
-    margin-top: 4px;
+    margin-top: 5px;
+}
+
+.score-big {
+    font-size: 3.7rem;
+    font-weight: 900;
+    line-height: 1;
 }
 
 .green {
@@ -128,34 +156,28 @@ h1, h2, h3 {
     color: #00d9ff !important;
 }
 
-.score-big {
-    font-size: 3.5rem;
-    font-weight: 900;
-    line-height: 1;
+.gray {
+    color: #777777 !important;
 }
 
-.progress-bg {
-    background: #15171b;
-    height: 9px;
+.progress-background {
+    width: 100%;
+    height: 10px;
+    background: #16191e;
     border-radius: 10px;
     overflow: hidden;
-    margin-top: 8px;
+    margin-top: 12px;
 }
 
-.progress-green {
+.progress-up {
     height: 100%;
     background: #00ff88;
 }
 
-.progress-red {
-    height: 100%;
-    background: #ff405c;
-}
-
 .factor {
-    border-bottom: 1px solid #191b20;
+    border-bottom: 1px solid #191c21;
     padding: 9px 0;
-    font-size: .82rem;
+    font-size: 0.80rem;
 }
 
 .factor:last-child {
@@ -164,106 +186,165 @@ h1, h2, h3 {
 
 .tag {
     display: inline-block;
-    border: 1px solid #272b32;
+    border: 1px solid #292d34;
     background: #0c0e11;
     padding: 4px 8px;
     border-radius: 4px;
     margin-right: 5px;
-    font-size: .65rem;
-    color: #888;
+    margin-top: 5px;
+    font-size: 0.63rem;
+    color: #888888;
+}
+
+.news-card {
+    background: #090b0e;
+    border-left: 3px solid #5d2b91;
+    padding: 11px;
+    margin-bottom: 8px;
+    border-radius: 3px;
+}
+
+.news-title {
+    color: #dddddd;
+    font-size: 0.80rem;
+    line-height: 1.45;
+}
+
+.news-meta {
+    color: #666666;
+    font-size: 0.62rem;
+    margin-top: 5px;
 }
 
 .alert-box {
     border-left: 3px solid #a96cff;
     background: #0d0a13;
-    padding: 12px;
+    padding: 13px;
     border-radius: 4px;
-    margin: 8px 0;
+}
+
+.warning-box {
+    border-left: 3px solid #ffc857;
+    background: #131006;
+    padding: 13px;
+    border-radius: 4px;
 }
 
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True
+)
 
 
 # ============================================================
-# API HELPERS
+# GENERIC REQUEST
+# ============================================================
+
+def safe_get(url, params=None, timeout=12):
+
+    try:
+        response = requests.get(
+            url,
+            params=params,
+            timeout=timeout,
+            headers={
+                "User-Agent": "Quantum-Solana-Terminal/1.0"
+            }
+        )
+
+        response.raise_for_status()
+        return response
+
+    except Exception:
+        return None
+
+
+# ============================================================
+# MARKET DATA
 # ============================================================
 
 @st.cache_data(ttl=30)
-def get_sol_price():
-    url = f"{COINGECKO}/simple/price"
-    params = {
-        "ids": "solana,bitcoin",
-        "vs_currencies": "usd",
-        "include_24hr_change": "true",
-        "include_24hr_vol": "true",
-        "include_market_cap": "true"
-    }
+def get_market_data():
+
+    response = safe_get(
+        f"{COINGECKO_URL}/simple/price",
+        params={
+            "ids": "solana,bitcoin,ethereum",
+            "vs_currencies": "usd",
+            "include_24hr_change": "true",
+            "include_24hr_vol": "true",
+            "include_market_cap": "true"
+        }
+    )
+
+    if response is None:
+        return {}
 
     try:
-        r = requests.get(url, params=params, timeout=10)
-        r.raise_for_status()
-        return r.json()
+        return response.json()
     except Exception:
         return {}
 
 
-@st.cache_data(ttl=60)
-def get_fear_greed():
-    try:
-        r = requests.get(FEAR_GREED, params={"limit": 1}, timeout=10)
-        r.raise_for_status()
-        data = r.json()["data"][0]
-
-        return {
-            "value": int(data["value"]),
-            "classification": data["value_classification"]
-        }
-    except Exception:
-        return {
-            "value": None,
-            "classification": "N/A"
-        }
-
+# ============================================================
+# CANDLES
+# ============================================================
 
 @st.cache_data(ttl=60)
-def get_klines(interval="1h", limit=200):
-    try:
-        params = {
+def get_candles(interval="1h", limit=250):
+
+    response = safe_get(
+        f"{BINANCE_URL}/klines",
+        params={
             "symbol": "SOLUSDT",
             "interval": interval,
             "limit": limit
         }
+    )
 
-        r = requests.get(
-            f"{BINANCE}/klines",
-            params=params,
-            timeout=10
+    if response is None:
+        return pd.DataFrame()
+
+    try:
+
+        raw = response.json()
+
+        df = pd.DataFrame(
+            raw,
+            columns=[
+                "timestamp",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+                "close_time",
+                "quote_volume",
+                "trades",
+                "buy_base",
+                "buy_quote",
+                "ignore"
+            ]
         )
 
-        r.raise_for_status()
-
-        raw = r.json()
-
-        df = pd.DataFrame(raw, columns=[
-            "time",
+        numeric_columns = [
             "open",
             "high",
             "low",
             "close",
-            "volume",
-            "close_time",
-            "quote_volume",
-            "trades",
-            "buy_base",
-            "buy_quote",
-            "ignore"
-        ])
+            "volume"
+        ]
 
-        for c in ["open", "high", "low", "close", "volume"]:
-            df[c] = pd.to_numeric(df[c])
+        for column in numeric_columns:
+            df[column] = pd.to_numeric(
+                df[column],
+                errors="coerce"
+            )
 
-        df["time"] = pd.to_datetime(df["time"], unit="ms")
+        df["timestamp"] = pd.to_datetime(
+            df["timestamp"],
+            unit="ms"
+        )
 
         return df
 
@@ -272,630 +353,89 @@ def get_klines(interval="1h", limit=200):
 
 
 # ============================================================
-# TECHNICAL INDICATORS
+# FEAR & GREED
 # ============================================================
 
-def calculate_rsi(series, period=14):
+@st.cache_data(ttl=300)
+def get_fear_greed():
 
-    delta = series.diff()
+    response = safe_get(
+        FEAR_GREED_URL,
+        params={"limit": 1}
+    )
 
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-
-    avg_gain = gain.rolling(period).mean()
-    avg_loss = loss.rolling(period).mean()
-
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-
-    return 100 - (100 / (1 + rs))
-
-
-def calculate_indicators(df):
-
-    if df.empty:
-        return df
-
-    df = df.copy()
-
-    df["EMA20"] = df["close"].ewm(span=20).mean()
-    df["EMA50"] = df["close"].ewm(span=50).mean()
-    df["EMA200"] = df["close"].ewm(span=200).mean()
-
-    df["RSI"] = calculate_rsi(df["close"])
-
-    df["VOL_MA20"] = df["volume"].rolling(20).mean()
-
-    return df
-
-
-# ============================================================
-# SCORING ENGINE
-# ============================================================
-
-def technical_score(df):
-
-    if df.empty or len(df) < 50:
-        return 0, []
-
-    last = df.iloc[-1]
-
-    score = 0
-    factors = []
-
-    # EMA trend
-    if last["close"] > last["EMA20"]:
-        score += 12
-        factors.append(("🟢", "Precio sobre EMA20", "+12"))
-    else:
-        score -= 12
-        factors.append(("🔴", "Precio bajo EMA20", "-12"))
-
-    if last["EMA20"] > last["EMA50"]:
-        score += 10
-        factors.append(("🟢", "EMA20 > EMA50", "+10"))
-    else:
-        score -= 10
-        factors.append(("🔴", "EMA20 < EMA50", "-10"))
-
-    # RSI
-    rsi = float(last["RSI"])
-
-    if 50 <= rsi <= 68:
-        score += 10
-        factors.append(("🟢", f"RSI saludable ({rsi:.1f})", "+10"))
-    elif rsi > 75:
-        score -= 8
-        factors.append(("🔴", f"RSI sobrecomprado ({rsi:.1f})", "-8"))
-    elif rsi < 30:
-        score += 5
-        factors.append(("🟡", f"RSI sobrevendido ({rsi:.1f})", "+5"))
-    else:
-        factors.append(("⚪", f"RSI neutral ({rsi:.1f})", "0"))
-
-    # Volume
-    if last["volume"] > last["VOL_MA20"]:
-        score += 8
-        factors.append(("🟢", "Volumen sobre media", "+8"))
-    else:
-        score -= 3
-        factors.append(("🔴", "Volumen bajo media", "-3"))
-
-    return max(-50, min(50, score)), factors
-
-
-def market_score(market):
-
-    score = 0
-    factors = []
-
-    if not market:
-        return 0, factors
-
-    sol = market.get("solana", {})
-    btc = market.get("bitcoin", {})
-
-    sol_change = sol.get("usd_24h_change", 0) or 0
-    btc_change = btc.get("usd_24h_change", 0) or 0
-
-    # SOL momentum
-    if sol_change > 2:
-        score += 10
-        factors.append(("🟢", f"SOL momentum +{sol_change:.2f}%", "+10"))
-    elif sol_change < -2:
-        score -= 10
-        factors.append(("🔴", f"SOL momentum {sol_change:.2f}%", "-10"))
-    else:
-        factors.append(("⚪", f"SOL 24h {sol_change:.2f}%", "0"))
-
-    # BTC influence
-    if btc_change > 1:
-        score += 8
-        factors.append(("🟢", f"BTC fuerte +{btc_change:.2f}%", "+8"))
-    elif btc_change < -1:
-        score -= 8
-        factors.append(("🔴", f"BTC débil {btc_change:.2f}%", "-8"))
-    else:
-        factors.append(("⚪", f"BTC neutral {btc_change:.2f}%", "0"))
-
-    return max(-50, min(50, score)), factors
-
-
-def sentiment_score(fng):
-
-    if fng["value"] is None:
-        return 0, []
-
-    value = fng["value"]
-
-    if value >= 75:
-        return 8, [("🟢", f"Fear & Greed: {value}", "+8")]
-
-    if value >= 55:
-        return 5, [("🟢", f"Fear & Greed: {value}", "+5")]
-
-    if value <= 25:
-        return -8, [("🔴", f"Fear & Greed: {value}", "-8")]
-
-    if value <= 45:
-        return -4, [("🟡", f"Fear & Greed: {value}", "-4")]
-
-    return 0, [("⚪", f"Fear & Greed: {value}", "0")]
-
-
-# ============================================================
-# TELEGRAM
-# ============================================================
-
-def send_telegram(message):
-
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        return False, "Telegram no configurado"
-
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    if response is None:
+        return {
+            "value": None,
+            "classification": "N/A"
+        }
 
     try:
-        response = requests.post(
-            url,
-            data={
-                "chat_id": TELEGRAM_CHAT_ID,
-                "text": message
-            },
-            timeout=10
-        )
 
-        if response.ok:
-            return True, "Telegram OK"
+        data = response.json()["data"][0]
 
-        return False, response.text
-
-    except Exception as e:
-        return False, str(e)
-
-
-def telegram_test():
-
-    message = """🟣 QUANTUM SOLANA TEST
-
-Telegram connection: ONLINE
-
-Bot:
-@Mycrypto_best_bot
-
-SOL Intelligence Terminal
-Status: READY
-
-This is only a connection test."""
-
-    return send_telegram(message)
-
-
-# ============================================================
-# HEADER
-# ============================================================
-
-market = get_sol_price()
-fear_greed = get_fear_greed()
-
-sol = market.get("solana", {})
-btc = market.get("bitcoin", {})
-
-sol_price = sol.get("usd", 0)
-sol_change = sol.get("usd_24h_change", 0)
-sol_volume = sol.get("usd_24h_vol", 0)
-
-btc_price = btc.get("usd", 0)
-btc_change = btc.get("usd_24h_change", 0)
-
-
-st.markdown("""
-<div class="quantum-title">
-QUANTUM // SOLANA INTELLIGENCE
-</div>
-
-<div class="quantum-subtitle">
-MULTI-VECTOR MARKET ANALYSIS // SOL ONLY
-&nbsp;&nbsp; <span class="live">● SYSTEM ONLINE</span>
-</div>
-""", unsafe_allow_html=True)
-
-st.write("")
-
-
-# ============================================================
-# TOP METRICS
-# ============================================================
-
-c1, c2, c3, c4, c5 = st.columns(5)
-
-with c1:
-    st.markdown(
-        f"""
-        <div class="panel">
-        <div class="metric-label">SOL / USD</div>
-        <div class="metric-value">${sol_price:,.2f}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-with c2:
-    cls = "green" if sol_change >= 0 else "red"
-
-    st.markdown(
-        f"""
-        <div class="panel">
-        <div class="metric-label">SOL 24H</div>
-        <div class="metric-value {cls}">{sol_change:+.2f}%</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-with c3:
-    st.markdown(
-        f"""
-        <div class="panel">
-        <div class="metric-label">SOL VOLUME</div>
-        <div class="metric-value">${sol_volume/1e9:.2f}B</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-with c4:
-    cls = "green" if btc_change >= 0 else "red"
-
-    st.markdown(
-        f"""
-        <div class="panel">
-        <div class="metric-label">BTC 24H</div>
-        <div class="metric-value {cls}">{btc_change:+.2f}%</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-with c5:
-    fg_value = fear_greed["value"]
-    fg_text = fear_greed["classification"]
-
-    st.markdown(
-        f"""
-        <div class="panel">
-        <div class="metric-label">FEAR / GREED</div>
-        <div class="metric-value purple">
-        {fg_value if fg_value is not None else "N/A"}
-        </div>
-        <div class="metric-label">{fg_text}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-# ============================================================
-# DATA
-# ============================================================
-
-df = get_klines("1h", 200)
-df = calculate_indicators(df)
-
-tech_score, tech_factors = technical_score(df)
-market_score_value, market_factors = market_score(market)
-sent_score, sentiment_factors = sentiment_score(fear_greed)
-
-# Weighted global score
-# Technical 45%
-# Market 30%
-# Sentiment 15%
-# Reserve 10% for future derivatives/on-chain/news modules
-
-global_score = (
-    tech_score * 0.45 +
-    market_score_value * 0.30 +
-    sent_score * 0.15
-)
-
-global_score = max(-100, min(100, global_score))
-
-# Convert score into directional chances
-bullish = int(round(50 + global_score / 2))
-bullish = max(5, min(95, bullish))
-bearish = 100 - bullish
-
-# Confidence based on data availability
-confidence = 60
-
-if not df.empty:
-    confidence += 10
-
-if market:
-    confidence += 10
-
-if fear_greed["value"] is not None:
-    confidence += 5
-
-if not df.empty and len(df) >= 150:
-    confidence += 5
-
-confidence = min(95, confidence)
-
-
-if bullish >= 70:
-    vector = "STRONG BULLISH"
-    vector_class = "green"
-elif bullish >= 58:
-    vector = "BULLISH"
-    vector_class = "green"
-elif bullish <= 30:
-    vector = "STRONG BEARISH"
-    vector_class = "red"
-elif bullish <= 42:
-    vector = "BEARISH"
-    vector_class = "red"
-else:
-    vector = "NEUTRAL"
-    vector_class = "yellow"
-
-
-# ============================================================
-# MAIN VECTOR
-# ============================================================
-
-left, right = st.columns([1.7, 1])
-
-with left:
-
-    st.markdown(
-        """
-        <div class="panel panel-purple">
-        <div class="metric-label">QUANTUM MARKET VECTOR</div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        f"""
-        <div style="display:flex;justify-content:space-between;align-items:end;">
-            <div>
-                <div class="score-big {vector_class}">
-                    {bullish}%
-                </div>
-                <div class="metric-label">CHANCE OF UPSIDE</div>
-            </div>
-
-            <div style="text-align:right;">
-                <div class="score-big red">{bearish}%</div>
-                <div class="metric-label">CHANCE OF DOWNSIDE</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        f"""
-        <div class="progress-bg">
-            <div class="progress-green" style="width:{bullish}%"></div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        f"""
-        <br>
-        <span class="tag">VECTOR: {vector}</span>
-        <span class="tag">CONFIDENCE: {confidence}%</span>
-        <span class="tag">SCORE: {global_score:+.1f}</span>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
-with right:
-
-    st.markdown(
-        f"""
-        <div class="panel">
-        <div class="metric-label">MODEL STATUS</div>
-        <br>
-
-        <div class="factor">
-        Technical
-        <span style="float:right" class="cyan">{tech_score:+d}</span>
-        </div>
-
-        <div class="factor">
-        Market / BTC
-        <span style="float:right" class="cyan">{market_score_value:+d}</span>
-        </div>
-
-        <div class="factor">
-        Sentiment
-        <span style="float:right" class="cyan">{sent_score:+d}</span>
-        </div>
-
-        <div class="factor">
-        Confidence
-        <span style="float:right" class="green">{confidence}%</span>
-        </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-# ============================================================
-# CHART
-# ============================================================
-
-st.markdown("### 📈 SOL MARKET STRUCTURE")
-
-if not df.empty:
-
-    fig = go.Figure()
-
-    fig.add_trace(
-        go.Candlestick(
-            x=df["time"],
-            open=df["open"],
-            high=df["high"],
-            low=df["low"],
-            close=df["close"],
-            name="SOL"
-        )
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=df["time"],
-            y=df["EMA20"],
-            name="EMA 20",
-            line=dict(width=1)
-        )
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=df["time"],
-            y=df["EMA50"],
-            name="EMA 50",
-            line=dict(width=1)
-        )
-    )
-
-    fig.update_layout(
-        height=560,
-        template="plotly_dark",
-        paper_bgcolor="#050607",
-        plot_bgcolor="#050607",
-        margin=dict(l=10, r=10, t=20, b=10),
-        xaxis_rangeslider_visible=False,
-        legend=dict(
-            orientation="h",
-            y=1.02
-        )
-    )
-
-    st.plotly_chart(
-        fig,
-        use_container_width=True,
-        config={
-            "displaylogo": False,
-            "scrollZoom": True
+        return {
+            "value": int(data["value"]),
+            "classification": data["value_classification"]
         }
-    )
+
+    except Exception:
+
+        return {
+            "value": None,
+            "classification": "N/A"
+        }
 
 
 # ============================================================
-# FACTORS
+# NEWS
 # ============================================================
 
-st.markdown("### 🧠 VECTOR COMPONENTS")
+@st.cache_data(ttl=300)
+def get_news():
 
-all_factors = (
-    tech_factors +
-    market_factors +
-    sentiment_factors
-)
-
-col1, col2 = st.columns(2)
-
-with col1:
-
-    st.markdown(
-        '<div class="panel"><div class="metric-label">ACTIVE SIGNALS</div>',
-        unsafe_allow_html=True
+    query = (
+        "Solana OR SOL crypto OR Bitcoin crypto OR "
+        "Ethereum crypto OR crypto ETF OR SEC crypto OR "
+        "Federal Reserve OR Fed OR inflation OR tariffs OR "
+        "Trump crypto OR cryptocurrency regulation"
     )
 
-    for icon, text_factor, value in all_factors:
-
-        cls = "green" if value.startswith("+") else (
-            "red" if value.startswith("-") else "yellow"
-        )
-
-        st.markdown(
-            f"""
-            <div class="factor">
-            {icon} {text_factor}
-            <span style="float:right" class="{cls}">
-            {value}
-            </span>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
-with col2:
-
-    st.markdown(
-        """
-        <div class="panel">
-        <div class="metric-label">QUANTUM INTERPRETATION</div>
-        <br>
-        """,
-        unsafe_allow_html=True
+    url = (
+        "https://news.google.com/rss/search?"
+        "q=" + quote(query) +
+        "&hl=en-US&gl=US&ceid=US:en"
     )
 
-    if bullish >= 70:
+    response = safe_get(url)
 
-        interpretation = """
-        <div class="alert-box">
-        <span class="green"><b>🟢 STRONG BULLISH BIAS</b></span><br><br>
-        Multiple market vectors currently support upside.
-        The model detects more bullish than bearish pressure.
-        </div>
-        """
+    if response is None:
+        return []
 
-    elif bullish >= 58:
+    try:
 
-        interpretation = """
-        <div class="alert-box">
-        <span class="green"><b>🟢 BULLISH BIAS</b></span><br><br>
-        The current data favors upside, although confirmation
-        from additional vectors is recommended.
-        </div>
-        """
+        root = ET.fromstring(response.text)
 
-    elif bullish <= 30:
+        articles = []
 
-        interpretation = """
-        <div class="alert-box">
-        <span class="red"><b>🔴 STRONG BEARISH BIAS</b></span><br><br>
-        Several available vectors currently favor downside risk.
-        </div>
-        """
+        for item in root.findall(".//item")[:20]:
 
-    elif bullish <= 42:
+            title_node = item.find("title")
+            link_node = item.find("link")
+            date_node = item.find("pubDate")
+            source_node = item.find("source")
 
-        interpretation = """
-        <div class="alert-box">
-        <span class="red"><b>🔴 BEARISH BIAS</b></span><br><br>
-        Current market structure favors downside.
-        </div>
-        """
+            title = (
+                title_node.text
+                if title_node is not None
+                else "Unknown"
+            )
 
-    else:
+            link = (
+                link_node.text
+                if link_node is not None
+                else ""
+            )
 
-        interpretation = """
-        <div class="alert-box">
-        <span class="yellow"><b>🟡 NEUTRAL MARKET</b></span><br><br>
-        The available signals do not provide sufficient
-        directional advantage.
-        </div>
-        """
-
-    st.markdown(interpretation, unsafe_allow_html=True)
-
-    st.markdown(
-        """
-        <div class="metric-label">
-        IMPORTANT: the percentage is a quantitative market
-        score, not a guaranteed probab
+            pub_date = (
+                date_node.text
