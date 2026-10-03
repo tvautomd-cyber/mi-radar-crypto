@@ -6,7 +6,7 @@ st.set_page_config(page_title="QUANTUM SOLANA MULTI-VECTOR V4", layout="vertical
 
 # --- CONFIGURACIÓN DE TU TELEGRAM ---
 # 👇 BORRA EL TEXTO DE ABAJO Y PEGA TU TOKEN DE BOTFATHER (Deja las comillas)
-TELEGRAM_TOKEN = "AQUÍ_PEGA_TU_TOKEN_DE_BOTFATHER"
+TELEGRAM_TOKEN = "8951377031:AAEMQ7r94hDKcgn6sEEXZasFKjvnvze3nyc"
 
 # Estilos Core Dark Hacker y Matrix adaptados a CryptoPanic
 st.markdown("""
