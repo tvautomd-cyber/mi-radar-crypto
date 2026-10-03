@@ -2,14 +2,14 @@ import streamlit as st
 import requests
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
 import xml.etree.ElementTree as ET
 from urllib.parse import quote
 from datetime import datetime, timezone
 
+
 # ============================================================
-# QUANTUM SOLANA RADAR
-# SOL ONLY - Streamlit
+# QUANTUM // SOLANA RADAR
+# Stable Streamlit Edition
 # ============================================================
 
 st.set_page_config(
@@ -19,47 +19,77 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ------------------------- CONFIG ----------------------------
 
-BINANCE = "https://api.binance.com/api/v3"
-COINGECKO = "https://api.coingecko.com/api/v3"
-FEAR_GREED = "https://api.alternative.me/fng/"
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
-TELEGRAM_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", "")
-TELEGRAM_USERNAME = st.secrets.get(
-    "TELEGRAM_BOT_USERNAME",
-    "Mycrypto_best_bot",
+BINANCE_API = "https://api.binance.com/api/v3"
+COINGECKO_API = "https://api.coingecko.com/api/v3"
+FEAR_GREED_API = "https://api.alternative.me/fng/"
+
+TELEGRAM_TOKEN = st.secrets.get(
+    "TELEGRAM_BOT_TOKEN",
+    ""
 )
 
-# -------------------------- STYLE ----------------------------
+TELEGRAM_CHAT_ID = st.secrets.get(
+    "TELEGRAM_CHAT_ID",
+    ""
+)
+
+TELEGRAM_USERNAME = st.secrets.get(
+    "TELEGRAM_BOT_USERNAME",
+    "Mycrypto_best_bot"
+)
+
+
+# ============================================================
+# CSS
+# ============================================================
 
 st.markdown(
     """
 <style>
+
 .stApp {
     background:
-        radial-gradient(circle at 85% 5%, rgba(130,55,255,.13), transparent 30%),
-        radial-gradient(circle at 5% 95%, rgba(0,255,150,.05), transparent 28%),
+        radial-gradient(
+            circle at 85% 5%,
+            rgba(120,40,255,0.14),
+            transparent 30%
+        ),
+        radial-gradient(
+            circle at 10% 90%,
+            rgba(0,255,150,0.05),
+            transparent 30%
+        ),
         #050607;
+
     color: #d8d8d8;
-    font-family: Consolas, "Courier New", monospace;
+    font-family:
+        Consolas,
+        "Courier New",
+        monospace;
 }
 
 .block-container {
-    max-width: 1600px;
+    max-width: 1550px;
     padding-top: 1.2rem;
 }
 
 h1, h2, h3, p, div, span {
-    font-family: Consolas, "Courier New", monospace;
+    font-family:
+        Consolas,
+        "Courier New",
+        monospace;
 }
 
 .q-title {
     font-size: 2.2rem;
     font-weight: 900;
     letter-spacing: 4px;
-    color: #ffffff;
+    color: white;
 }
 
 .q-subtitle {
@@ -69,7 +99,13 @@ h1, h2, h3, p, div, span {
 }
 
 .panel {
-    background: linear-gradient(145deg, #0b0d10, #08090b);
+    background:
+        linear-gradient(
+            145deg,
+            #0c0e11,
+            #070809
+        );
+
     border: 1px solid #20242a;
     border-radius: 8px;
     padding: 16px;
@@ -77,8 +113,9 @@ h1, h2, h3, p, div, span {
 }
 
 .panel-purple {
-    border-color: #6d35a8;
-    box-shadow: 0 0 25px rgba(140,60,255,.10);
+    border-color: #7138aa;
+    box-shadow:
+        0 0 25px rgba(140,60,255,.10);
 }
 
 .label {
@@ -88,7 +125,7 @@ h1, h2, h3, p, div, span {
 }
 
 .big {
-    color: #fff;
+    color: white;
     font-size: 2rem;
     font-weight: 900;
 }
@@ -172,52 +209,86 @@ h1, h2, h3, p, div, span {
     padding: 12px;
     border-radius: 4px;
 }
+
+.metric-box {
+    background: #090b0e;
+    border: 1px solid #1d2025;
+    padding: 14px;
+    border-radius: 7px;
+}
+
 </style>
 """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
-# ------------------------- HELPERS ---------------------------
+
+# ============================================================
+# HTTP HELPER
+# ============================================================
 
 def get_json(url, params=None, timeout=12):
+
     try:
-        r = requests.get(
+
+        response = requests.get(
             url,
             params=params,
             timeout=timeout,
-            headers={"User-Agent": "Quantum-Solana-Radar/1.0"},
+            headers={
+                "User-Agent":
+                    "Quantum-Solana-Radar/1.0"
+            }
         )
-        r.raise_for_status()
-        return r.json()
+
+        response.raise_for_status()
+
+        return response.json()
+
     except Exception:
+
         return None
 
 
-# ----------------------- MARKET DATA --------------------------
+# ============================================================
+# MARKET DATA
+# ============================================================
 
 @st.cache_data(ttl=30)
 def get_market():
+
     data = get_json(
-        f"{COINGECKO}/simple/price",
+        f"{COINGECKO_API}/simple/price",
         {
-            "ids": "solana,bitcoin,ethereum",
-            "vs_currencies": "usd",
-            "include_24hr_change": "true",
-            "include_24hr_vol": "true",
-        },
+            "ids":
+                "solana,bitcoin,ethereum",
+            "vs_currencies":
+                "usd",
+            "include_24hr_change":
+                "true",
+            "include_24hr_vol":
+                "true"
+        }
     )
+
     return data or {}
 
 
 @st.cache_data(ttl=60)
-def get_candles(interval="1h", limit=250):
+def get_candles():
+
     data = get_json(
-        f"{BINANCE}/klines",
+        f"{BINANCE_API}/klines",
         {
-            "symbol": "SOLUSDT",
-            "interval": interval,
-            "limit": limit,
-        },
+            "symbol":
+                "SOLUSDT",
+
+            "interval":
+                "1h",
+
+            "limit":
+                250
+        }
     )
 
     if not isinstance(data, list):
@@ -235,59 +306,96 @@ def get_candles(interval="1h", limit=250):
         "trades",
         "buy_base",
         "buy_quote",
-        "ignore",
+        "ignore"
     ]
 
     try:
-        df = pd.DataFrame(data, columns=columns)
 
-        for col in ["open", "high", "low", "close", "volume"]:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+        df = pd.DataFrame(
+            data,
+            columns=columns
+        )
 
-        df["time"] = pd.to_datetime(df["time"], unit="ms")
+        for column in [
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume"
+        ]:
+
+            df[column] = pd.to_numeric(
+                df[column],
+                errors="coerce"
+            )
+
+        df["time"] = pd.to_datetime(
+            df["time"],
+            unit="ms"
+        )
 
         return df
 
     except Exception:
+
         return pd.DataFrame()
 
 
+# ============================================================
+# FEAR & GREED
+# ============================================================
+
 @st.cache_data(ttl=300)
 def get_fear_greed():
+
     data = get_json(
-        FEAR_GREED,
-        {"limit": 1},
+        FEAR_GREED_API,
+        {
+            "limit": 1
+        }
     )
 
     try:
+
         item = data["data"][0]
 
         return {
-            "value": int(item["value"]),
-            "classification": item["value_classification"],
+            "value":
+                int(item["value"]),
+
+            "classification":
+                item[
+                    "value_classification"
+                ]
         }
 
     except Exception:
+
         return {
             "value": None,
-            "classification": "N/A",
+            "classification": "N/A"
         }
 
 
-# --------------------------- NEWS -----------------------------
+# ============================================================
+# NEWS
+# ============================================================
 
 @st.cache_data(ttl=300)
 def get_news():
 
     query = (
-        "Solana OR SOL crypto OR Bitcoin crypto OR Ethereum crypto "
-        "OR crypto ETF OR SEC crypto OR Federal Reserve OR Fed "
-        "OR inflation OR tariffs OR Trump crypto OR regulation"
+        "Solana OR SOL crypto OR Bitcoin "
+        "OR crypto ETF OR SEC crypto OR "
+        "Federal Reserve OR Fed OR inflation "
+        "OR tariffs OR Trump crypto OR "
+        "crypto regulation"
     )
 
     url = (
         "https://news.google.com/rss/search?"
-        + "q=" + quote(query)
+        "q="
+        + quote(query)
         + "&hl=en-US&gl=US&ceid=US:en"
     )
 
@@ -297,13 +405,16 @@ def get_news():
             url,
             timeout=12,
             headers={
-                "User-Agent": "Quantum-Solana-Radar/1.0"
-            },
+                "User-Agent":
+                    "Quantum-Solana-Radar/1.0"
+            }
         )
 
         response.raise_for_status()
 
-        root = ET.fromstring(response.text)
+        root = ET.fromstring(
+            response.text
+        )
 
     except Exception:
 
@@ -311,29 +422,26 @@ def get_news():
 
     articles = []
 
-    for item in root.findall(".//item")[:25]:
+    for item in root.findall(
+        ".//item"
+    )[:25]:
 
-        title_node = item.find("title")
-        link_node = item.find("link")
-        date_node = item.find("pubDate")
-        source_node = item.find("source")
+        title_node = item.find(
+            "title"
+        )
+
+        source_node = item.find(
+            "source"
+        )
+
+        date_node = item.find(
+            "pubDate"
+        )
 
         title = (
             title_node.text
             if title_node is not None
             else "Unknown"
-        )
-
-        link = (
-            link_node.text
-            if link_node is not None
-            else ""
-        )
-
-        pub_date = (
-            date_node.text
-            if date_node is not None
-            else ""
         )
 
         source = (
@@ -342,21 +450,37 @@ def get_news():
             else "News"
         )
 
+        date = (
+            date_node.text
+            if date_node is not None
+            else ""
+        )
+
         articles.append(
             {
-                "title": title or "Unknown",
-                "link": link or "",
-                "date": pub_date or "",
-                "source": source or "News",
+                "title":
+                    title or "Unknown",
+
+                "source":
+                    source or "News",
+
+                "date":
+                    date or ""
             }
         )
 
     return articles
 
 
-def score_news(articles):
+# ============================================================
+# NEWS SENTIMENT
+# ============================================================
 
-    bullish = [
+def calculate_news_score(
+    articles
+):
+
+    bullish_words = [
         "etf",
         "approval",
         "approved",
@@ -373,10 +497,10 @@ def score_news(articles):
         "upgrade",
         "positive",
         "staking",
-        "investment",
+        "investment"
     ]
 
-    bearish = [
+    bearish_words = [
         "hack",
         "exploit",
         "attack",
@@ -394,64 +518,100 @@ def score_news(articles):
         "crash",
         "sanction",
         "tariff",
-        "inflation",
+        "inflation"
     ]
 
     total = 0
-    result = []
+
+    results = []
 
     for article in articles:
 
-        text = article["title"].lower()
+        title = article[
+            "title"
+        ].lower()
 
-        up = sum(
-            word in text
-            for word in bullish
+        bullish = sum(
+            word in title
+            for word in bullish_words
         )
 
-        down = sum(
-            word in text
-            for word in bearish
+        bearish = sum(
+            word in title
+            for word in bearish_words
         )
 
         score = max(
             -5,
-            min(5, up - down)
+            min(
+                5,
+                bullish - bearish
+            )
         )
 
         total += score
 
         copy = article.copy()
+
         copy["score"] = score
 
-        result.append(copy)
+        results.append(copy)
 
-    if not result:
+    if not results:
+
         return 0.0, []
 
-    average = total / len(result)
+    average = (
+        total / len(results)
+    )
 
     return (
-        max(-10.0, min(10.0, average * 3.0)),
-        result,
+        max(
+            -10,
+            min(
+                10,
+                average * 3
+            )
+        ),
+        results
     )
 
 
-# --------------------- TECHNICAL ANALYSIS ---------------------
+# ============================================================
+# TECHNICAL INDICATORS
+# ============================================================
 
-def rsi(series, period=14):
+def calculate_rsi(
+    series,
+    period=14
+):
 
     delta = series.diff()
 
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
+    gain = delta.clip(
+        lower=0
+    )
 
-    avg_gain = gain.rolling(period).mean()
-    avg_loss = loss.rolling(period).mean()
+    loss = -delta.clip(
+        upper=0
+    )
 
-    rs = avg_gain / avg_loss.replace(
-        0,
-        np.nan,
+    average_gain = (
+        gain.rolling(period)
+        .mean()
+    )
+
+    average_loss = (
+        loss.rolling(period)
+        .mean()
+    )
+
+    rs = (
+        average_gain /
+        average_loss.replace(
+            0,
+            np.nan
+        )
     )
 
     return 100 - (
@@ -459,71 +619,108 @@ def rsi(series, period=14):
     )
 
 
-def indicators(df):
+def calculate_indicators(
+    df
+):
 
     if df.empty:
+
         return df
 
-    out = df.copy()
+    result = df.copy()
 
-    out["EMA20"] = (
-        out["close"]
-        .ewm(span=20, adjust=False)
+    result["EMA20"] = (
+        result["close"]
+        .ewm(
+            span=20,
+            adjust=False
+        )
         .mean()
     )
 
-    out["EMA50"] = (
-        out["close"]
-        .ewm(span=50, adjust=False)
+    result["EMA50"] = (
+        result["close"]
+        .ewm(
+            span=50,
+            adjust=False
+        )
         .mean()
     )
 
-    out["EMA200"] = (
-        out["close"]
-        .ewm(span=200, adjust=False)
+    result["EMA200"] = (
+        result["close"]
+        .ewm(
+            span=200,
+            adjust=False
+        )
         .mean()
     )
 
-    out["RSI"] = rsi(
-        out["close"]
+    result["RSI"] = (
+        calculate_rsi(
+            result["close"]
+        )
     )
 
-    out["VOLMA20"] = (
-        out["volume"]
+    result["VOLMA20"] = (
+        result["volume"]
         .rolling(20)
         .mean()
     )
 
-    return out
+    return result
 
+
+# ============================================================
+# TECHNICAL SCORE
+# ============================================================
 
 def technical_score(df):
 
-    if df.empty or len(df) < 50:
+    if (
+        df.empty
+        or len(df) < 50
+    ):
 
-        return 0.0, []
+        return 0, []
 
     row = df.iloc[-1]
 
-    score = 0.0
+    score = 0
+
     factors = []
 
-    close = float(row["close"])
-    ema20 = float(row["EMA20"])
-    ema50 = float(row["EMA50"])
-    ema200 = float(row["EMA200"])
+    close = float(
+        row["close"]
+    )
+
+    ema20 = float(
+        row["EMA20"]
+    )
+
+    ema50 = float(
+        row["EMA50"]
+    )
+
+    ema200 = float(
+        row["EMA200"]
+    )
 
     current_rsi = (
         float(row["RSI"])
         if pd.notna(row["RSI"])
-        else 50.0
+        else 50
     )
 
-    volume = float(row["volume"])
+    volume = float(
+        row["volume"]
+    )
 
-    volume_ma = (
+    volume_average = (
         float(row["VOLMA20"])
-        if pd.notna(row["VOLMA20"])
+        if pd.notna(
+            row["VOLMA20"]
+        )
         else volume
     )
 
@@ -532,7 +729,11 @@ def technical_score(df):
         score += 10
 
         factors.append(
-            ("🟢", "Precio sobre EMA20", "+10")
+            (
+                "🟢",
+                "Precio sobre EMA20",
+                "+10"
+            )
         )
 
     else:
@@ -540,7 +741,11 @@ def technical_score(df):
         score -= 10
 
         factors.append(
-            ("🔴", "Precio bajo EMA20", "-10")
+            (
+                "🔴",
+                "Precio bajo EMA20",
+                "-10"
+            )
         )
 
     if ema20 > ema50:
@@ -548,7 +753,11 @@ def technical_score(df):
         score += 10
 
         factors.append(
-            ("🟢", "EMA20 sobre EMA50", "+10")
+            (
+                "🟢",
+                "EMA20 > EMA50",
+                "+10"
+            )
         )
 
     else:
@@ -556,7 +765,11 @@ def technical_score(df):
         score -= 10
 
         factors.append(
-            ("🔴", "EMA20 bajo EMA50", "-10")
+            (
+                "🔴",
+                "EMA20 < EMA50",
+                "-10"
+            )
         )
 
     if close > ema200:
@@ -564,7 +777,11 @@ def technical_score(df):
         score += 8
 
         factors.append(
-            ("🟢", "Precio sobre EMA200", "+8")
+            (
+                "🟢",
+                "Precio sobre EMA200",
+                "+8"
+            )
         )
 
     else:
@@ -572,7 +789,11 @@ def technical_score(df):
         score -= 8
 
         factors.append(
-            ("🔴", "Precio bajo EMA200", "-8")
+            (
+                "🔴",
+                "Precio bajo EMA200",
+                "-8"
+            )
         )
 
     if 50 <= current_rsi <= 68:
@@ -583,7 +804,7 @@ def technical_score(df):
             (
                 "🟢",
                 f"RSI saludable {current_rsi:.1f}",
-                "+8",
+                "+8"
             )
         )
 
@@ -595,7 +816,7 @@ def technical_score(df):
             (
                 "🔴",
                 f"RSI sobrecomprado {current_rsi:.1f}",
-                "-8",
+                "-8"
             )
         )
 
@@ -607,7 +828,7 @@ def technical_score(df):
             (
                 "🟡",
                 f"RSI sobrevendido {current_rsi:.1f}",
-                "+5",
+                "+5"
             )
         )
 
@@ -617,19 +838,19 @@ def technical_score(df):
             (
                 "⚪",
                 f"RSI neutral {current_rsi:.1f}",
-                "0",
+                "0"
             )
         )
 
-    if volume > volume_ma:
+    if volume > volume_average:
 
         score += 6
 
         factors.append(
             (
                 "🟢",
-                "Volumen sobre media 20",
-                "+6",
+                "Volumen > media 20",
+                "+6"
             )
         )
 
@@ -640,18 +861,30 @@ def technical_score(df):
         factors.append(
             (
                 "🔴",
-                "Volumen bajo media 20",
-                "-3",
+                "Volumen < media 20",
+                "-3"
             )
         )
 
     return (
-        max(-50.0, min(50.0, score)),
-        factors,
+        max(
+            -50,
+            min(
+                50,
+                score
+            )
+        ),
+        factors
     )
 
 
-def market_score(market):
+# ============================================================
+# MARKET SCORE
+# ============================================================
+
+def market_score(
+    market
+):
 
     sol = market.get(
         "solana",
@@ -664,14 +897,19 @@ def market_score(market):
     )
 
     sol_change = float(
-        sol.get("usd_24h_change") or 0
+        sol.get(
+            "usd_24h_change"
+        ) or 0
     )
 
     btc_change = float(
-        btc.get("usd_24h_change") or 0
+        btc.get(
+            "usd_24h_change"
+        ) or 0
     )
 
-    score = 0.0
+    score = 0
+
     factors = []
 
     if sol_change >= 3:
@@ -682,7 +920,7 @@ def market_score(market):
             (
                 "🟢",
                 f"SOL momentum {sol_change:+.2f}%",
-                "+12",
+                "+12"
             )
         )
 
@@ -694,7 +932,7 @@ def market_score(market):
             (
                 "🟢",
                 f"SOL momentum {sol_change:+.2f}%",
-                "+6",
+                "+6"
             )
         )
 
@@ -706,7 +944,7 @@ def market_score(market):
             (
                 "🔴",
                 f"SOL momentum {sol_change:+.2f}%",
-                "-12",
+                "-12"
             )
         )
 
@@ -718,7 +956,7 @@ def market_score(market):
             (
                 "🔴",
                 f"SOL momentum {sol_change:+.2f}%",
-                "-6",
+                "-6"
             )
         )
 
@@ -728,7 +966,7 @@ def market_score(market):
             (
                 "⚪",
                 f"SOL 24h {sol_change:+.2f}%",
-                "0",
+                "0"
             )
         )
 
@@ -740,11 +978,11 @@ def market_score(market):
             (
                 "🟢",
                 f"BTC fuerte {btc_change:+.2f}%",
-                "+10",
+                "+10"
             )
         )
 
-    elif btc_change >= 0.5:
+    elif btc_change >= .5:
 
         score += 5
 
@@ -752,7 +990,7 @@ def market_score(market):
             (
                 "🟢",
                 f"BTC positivo {btc_change:+.2f}%",
-                "+5",
+                "+5"
             )
         )
 
@@ -764,11 +1002,11 @@ def market_score(market):
             (
                 "🔴",
                 f"BTC débil {btc_change:+.2f}%",
-                "-10",
+                "-10"
             )
         )
 
-    elif btc_change <= -0.5:
+    elif btc_change <= -.5:
 
         score -= 5
 
@@ -776,128 +1014,119 @@ def market_score(market):
             (
                 "🔴",
                 f"BTC negativo {btc_change:+.2f}%",
-                "-5",
-            )
-        )
-
-    else:
-
-        factors.append(
-            (
-                "⚪",
-                f"BTC neutral {btc_change:+.2f}%",
-                "0",
+                "-5"
             )
         )
 
     return (
-        max(-50.0, min(50.0, score)),
-        factors,
+        max(
+            -50,
+            min(
+                50,
+                score
+            )
+        ),
+        factors
     )
 
 
-def sentiment_score(fg):
+# ============================================================
+# SENTIMENT
+# ============================================================
 
-    value = fg.get("value")
+def sentiment_score(
+    fear_greed
+):
+
+    value = fear_greed.get(
+        "value"
+    )
 
     if value is None:
 
-        return (
-            0.0,
-            [
-                (
-                    "⚪",
-                    "Fear & Greed no disponible",
-                    "0",
-                )
-            ],
-        )
+        return 0, [
+            (
+                "⚪",
+                "Fear & Greed no disponible",
+                "0"
+            )
+        ]
 
     if value >= 75:
 
-        return (
-            7.0,
-            [
-                (
-                    "🟢",
-                    f"Fear & Greed {value} - greed extremo",
-                    "+7",
-                )
-            ],
-        )
+        return 7, [
+            (
+                "🟢",
+                f"Fear & Greed {value}",
+                "+7"
+            )
+        ]
 
     if value >= 55:
 
-        return (
-            4.0,
-            [
-                (
-                    "🟢",
-                    f"Fear & Greed {value} - greed",
-                    "+4",
-                )
-            ],
-        )
+        return 4, [
+            (
+                "🟢",
+                f"Fear & Greed {value}",
+                "+4"
+            )
+        ]
 
     if value <= 25:
 
-        return (
-            -7.0,
-            [
-                (
-                    "🔴",
-                    f"Fear & Greed {value} - miedo extremo",
-                    "-7",
-                )
-            ],
-        )
+        return -7, [
+            (
+                "🔴",
+                f"Fear & Greed {value}",
+                "-7"
+            )
+        ]
 
     if value <= 45:
 
-        return (
-            -4.0,
-            [
-                (
-                    "🟡",
-                    f"Fear & Greed {value} - miedo",
-                    "-4",
-                )
-            ],
-        )
-
-    return (
-        0.0,
-        [
+        return -4, [
             (
-                "⚪",
-                f"Fear & Greed {value} - neutral",
-                "0",
+                "🟡",
+                f"Fear & Greed {value}",
+                "-4"
             )
-        ],
-    )
+        ]
+
+    return 0, [
+        (
+            "⚪",
+            f"Fear & Greed {value}",
+            "0"
+        )
+    ]
 
 
-# -------------------------- TELEGRAM --------------------------
+# ============================================================
+# TELEGRAM
+# ============================================================
 
-def telegram_send(message):
+def telegram_send(
+    message
+):
 
     if not TELEGRAM_TOKEN:
 
         return (
             False,
-            "Falta TELEGRAM_BOT_TOKEN en Streamlit Secrets.",
+            "Falta TELEGRAM_BOT_TOKEN"
         )
 
     if not TELEGRAM_CHAT_ID:
 
         return (
             False,
-            "Falta TELEGRAM_CHAT_ID en Streamlit Secrets.",
+            "Falta TELEGRAM_CHAT_ID"
         )
 
     url = (
         "https://api.telegram.org/"
-        f"bot{TELEGRAM_TOKEN}/sendMessage"
+        f"bot{TELEGRAM_TOKEN}"
+        "/sendMessage"
     )
 
     try:
@@ -905,61 +1134,60 @@ def telegram_send(message):
         response = requests.post(
             url,
             data={
-                "chat_id": TELEGRAM_CHAT_ID,
-                "text": message,
+                "chat_id":
+                    TELEGRAM_CHAT_ID,
+
+                "text":
+                    message
             },
-            timeout=12,
+            timeout=12
         )
 
         if response.ok:
 
             return (
                 True,
-                "Mensaje enviado.",
+                "Mensaje enviado"
             )
 
         return (
             False,
-            response.text,
+            response.text
         )
 
     except Exception as exc:
 
         return (
             False,
-            str(exc),
+            str(exc)
         )
 
 
-def telegram_get_chat_id():
+def find_chat_id():
 
     if not TELEGRAM_TOKEN:
 
         return (
             None,
-            "Falta TELEGRAM_BOT_TOKEN.",
+            "Token no configurado"
         )
 
     url = (
         "https://api.telegram.org/"
-        f"bot{TELEGRAM_TOKEN}/getUpdates"
+        f"bot{TELEGRAM_TOKEN}"
+        "/getUpdates"
     )
 
     try:
 
         response = requests.get(
             url,
-            timeout=12,
+            timeout=12
         )
 
-        if not response.ok:
+        data = response.json()
 
-            return (
-                None,
-                response.text,
-            )
-
-        updates = response.json().get(
+        updates = data.get(
             "result",
             []
         )
@@ -968,184 +1196,18 @@ def telegram_get_chat_id():
 
             return (
                 None,
-                "Envía /start al bot y vuelve a pulsar el botón.",
+                "Escribe /start al bot primero."
             )
 
-        for update in reversed(updates):
+        for update in reversed(
+            updates
+        ):
 
             message = update.get(
                 "message"
             )
 
-            if message and message.get("chat"):
+            if message:
 
-                return (
-                    str(
-                        message["chat"]["id"]
-                    ),
-                    "Chat ID encontrado.",
-                )
-
-        return (
-            None,
-            "No se encontró un chat.",
-        )
-
-    except Exception as exc:
-
-        return (
-            None,
-            str(exc),
-        )
-
-
-def make_alert(
-    price,
-    change,
-    up,
-    down,
-    confidence,
-    vector,
-    score,
-    factors,
-):
-
-    top = "\n".join(
-        f"{icon} {text} {value}"
-        for icon, text, value
-        in factors[:7]
-    )
-
-    return (
-        "🚨 QUANTUM SOL ALERT\n\n"
-        f"SOL: ${price:,.2f}\n"
-        f"24H: {change:+.2f}%\n\n"
-        f"🟢 UPSIDE: {up}%\n"
-        f"🔴 DOWNSIDE: {down}%\n"
-        f"🎯 CONFIDENCE: {confidence}%\n"
-        f"📡 VECTOR: {vector}\n"
-        f"MODEL SCORE: {score:+.1f}\n\n"
-        "TOP FACTORS\n"
-        f"{top}\n\n"
-        "Indicador cuantitativo. "
-        "No garantiza el movimiento futuro."
-    )
-
-
-# ------------------------- LOAD DATA --------------------------
-
-market = get_market()
-
-df = get_candles()
-
-df = indicators(df)
-
-fear_greed = get_fear_greed()
-
-news = get_news()
-
-news_s, news_items = score_news(
-    news
-)
-
-tech_s, tech_factors = technical_score(
-    df
-)
-
-market_s, market_factors = market_score(
-    market
-)
-
-sent_s, sent_factors = sentiment_score(
-    fear_greed
-)
-
-
-# ----------------------- GLOBAL MODEL -------------------------
-
-model_score = (
-    tech_s * 0.45
-    + market_s * 0.30
-    + sent_s * 0.15
-    + news_s * 0.10
-)
-
-model_score = max(
-    -100.0,
-    min(100.0, model_score),
-)
-
-upside = int(
-    round(
-        50 + model_score / 2
-    )
-)
-
-upside = max(
-    5,
-    min(95, upside),
-)
-
-downside = 100 - upside
-
-
-# ------------------------- CONFIDENCE -------------------------
-
-confidence = 45
-
-if market:
-    confidence += 15
-
-if not df.empty:
-    confidence += 15
-
-if len(df) >= 200:
-    confidence += 5
-
-if fear_greed.get("value") is not None:
-    confidence += 5
-
-if len(news) >= 5:
-    confidence += 10
-
-confidence = max(
-    25,
-    min(95, confidence),
-)
-
-
-# --------------------------- VECTOR ----------------------------
-
-if upside >= 75:
-
-    vector = "STRONG BULLISH"
-    vector_class = "green"
-
-elif upside >= 60:
-
-    vector = "BULLISH"
-    vector_class = "green"
-
-elif upside <= 25:
-
-    vector = "STRONG BEARISH"
-    vector_class = "red"
-
-elif upside <= 40:
-
-    vector = "BEARISH"
-    vector_class = "red"
-
-else:
-
-    vector = "NEUTRAL"
-    vector_class = "yellow"
-
-
-all_factors = (
-    tech_factors
-    + market_factors
-    + sent_factors
-)
-
-
+                chat = message.get(
+         
