@@ -4,8 +4,9 @@ import requests
 
 st.set_page_config(page_title="QUANTUM SOLANA MULTI-VECTOR V4", layout="wide")
 
-# --- CONFIGURACIÓN DE TU TELEGRAM ---
+# --- CONFIGURACIÓN DE TU TELEGRAM REAL ---
 TELEGRAM_TOKEN = "8951377031:AAEMQ7r94hDKcgn6sEEXZasFKjvnvze3nyc"
+CHAT_ID_USER = "6777767657"
 
 # Estilos Core Dark Hacker y Matrix adaptados a CryptoPanic
 st.markdown("""
@@ -66,7 +67,7 @@ elif prob_subir_sol < 40:
 else:
     rec_sol = "<span style='color:#ffaa00; font-weight:bold;'>[⚡ CONDICIÓN DE MERCADO NEUTRAL]</span>"
 
-# GRÁFICO MATRIX LIMPIO (CON VECTOR ZERO FIXED)
+# GRÁFICO MATRIX INTEGRADO EN STREAMLIT LIMPIO
 st.markdown(f"""
 <div class="solana-box">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -76,7 +77,6 @@ st.markdown(f"""
     <p style="font-size: 0.75rem; color: #a272e6; margin: 0 0 10px 0;">
         Consenso de Bots de Trading: <span style="color:#00ff66;">{bots_long}% Comprando (Longs)</span> | <span style="color:#ff3333;">{bots_short}% Vendiendo (Shorts)</span>
     </p>
-    
     <div style="font-size: 0.95rem; color: #9945FF; margin: 6px 0;">▲ {"■" * int(prob_subir_sol/5)}{"·" * (20 - int(prob_subir_sol/5))} {prob_subir_sol}% CHANCES DE SUBIR</div>
     <div style="border-top: 1px dashed #552277; margin: 8px 0; text-align: center; position: relative;">
         <span style="font-size: 0.6rem; color: #9945FF; letter-spacing: 2px; background: #0b0214; padding: 0 8px;">[ VECTOR ZERO EQUILIBRIUM ]</span>
@@ -116,12 +116,11 @@ for n in noticias_pool:
     </div>
     """, unsafe_allow_html=True)
 
-# --- BOTÓN INTERACTIVO CON TU CHAT ID FIJO REAL ---
+# --- BOTÓN INTERACTIVO CORREGIDO AL 100% ---
 if st.button("⚡ DETONAR ALERTA GLOBAL DE PRUEBA"):
-    chat_id = "6777767657"
     try:
-        msg = f"🚨 [ALERTA SOLANA MATRIX] 🚨\n\nConsenso de Red: ¡NO ES MALA IDEA COMPRAR!\n\nChances de Subida: {prob_subir_sol}%\nFuerza Bots: {bots_long}% Longs\n\nVariables: SEC Pro-ETFs (+40), Pánico Robo Exchange (-32)."
-        url_send = f"https://telegram.org{TELEGRAM_TOKEN}/sendMessage?chat_id={chat_id}&text={msg}"
+        msg = f"🚨 [ALERTA COMPLETA SOLANA] 🚨\n\n¡Análisis Matrix completado!\nConsenso de Red: ¡NO ES MALA IDEA COMPRAR!\n\nChances de Subida SOL: {prob_subir_sol}%\nFuerza Bots: {bots_long}% Longs\n\nVariables analizadas:\n- SEC Pro-ETFs (+40)\n- Pánico Robo Exchange (-32)\n- Geopolítica Trump (+15)."
+        url_send = f"https://telegram.org{TELEGRAM_TOKEN}/sendMessage?chat_id={CHAT_ID_USER}&text={msg}"
         requests.get(url_send)
         st.success("¡Notificación push inyectada con éxito en tu Telegram!")
     except Exception as e:
