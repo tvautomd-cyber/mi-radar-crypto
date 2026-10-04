@@ -1,67 +1,240 @@
-import streamlit as st
+import os
 import requests
-import html
-import re
+import streamlit as st
 import xml.etree.ElementTree as ET
-from urllib.parse import quote_plus
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
+
 # ============================================================
-# SOL RADAR // V6
-# Stable Streamlit version
-# No Plotly
-# No triple-quoted strings
+# SOLANA RADAR // TRADER CORE
+# Version estable para Streamlit Cloud
 # ============================================================
 
 st.set_page_config(
-    page_title="SOL RADAR // V6",
-    page_icon="🟣",
+    page_title="SOLANA RADAR // TRADER CORE",
+    page_icon="⚡",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
-TIMEOUT = 5
-HEADERS = {"User-Agent": "SOL-RADAR-V6/1.0"}
 
 # ============================================================
 # TELEGRAM
-#
-# Streamlit Cloud -> Manage app -> Settings -> Secrets
-#
-# [telegram]
-# token = "YOUR_NEW_BOT_TOKEN"
-# chat_id = "YOUR_CHAT_ID"
-#
-# NO pongas el token dentro de este archivo.
 # ============================================================
 
-def get_secret(section, key):
+def get_secret(name, default=""):
     try:
-        value = st.secrets[section][key]
-        return str(value).strip()
+        value = st.secrets[name]
+        if value:
+            return str(value)
     except Exception:
-        return ""
+        pass
+
+    return os.getenv(name, default)
 
 
-TELEGRAM_TOKEN = get_secret("telegram", "token")
-TELEGRAM_CHAT_ID = get_secret("telegram", "chat_id")
+TELEGRAM_TOKEN = get_secret("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = get_secret("TELEGRAM_CHAT_ID")
 
 
 # ============================================================
-# GENERAL HELPERS
+# ESTILO
 # ============================================================
 
-def api_json(url, params=None, timeout=TIMEOUT):
+CSS = (
+    "<style>"
+
+    ":root{"
+    "--bg:#05070b;"
+    "--panel:#0b1018;"
+    "--line:#1b2633;"
+    "--text:#dce7f3;"
+    "--muted:#718096;"
+    "--green:#00ff9d;"
+    "--red:#ff3b6b;"
+    "--cyan:#00d9ff;"
+    "--purple:#9945ff;"
+    "--yellow:#ffd166;"
+    "}"
+
+    ".stApp{"
+    "background:radial-gradient(circle at 50% -10%,#111a2b 0%,#05070b 48%);"
+    "color:#dce7f3;"
+    "}"
+
+    ".block-container{"
+    "max-width:1500px;"
+    "padding-top:1rem;"
+    "padding-bottom:3rem;"
+    "}"
+
+    "h1,h2,h3{"
+    "font-family:monospace!important;"
+    "}"
+
+    ".mono{"
+    "font-family:monospace;"
+    "}"
+
+    ".topbar{"
+    "border:1px solid #1b2633;"
+    "background:#070b11;"
+    "padding:14px;"
+    "border-radius:10px;"
+    "box-shadow:0 0 30px rgba(0,217,255,.05);"
+    "}"
+
+    ".brand{"
+    "font-family:monospace;"
+    "font-weight:900;"
+    "font-size:1.35rem;"
+    "color:white;"
+    "}"
+
+    ".sub{"
+    "font-family:monospace;"
+    "font-size:.68rem;"
+    "color:#718096;"
+    "margin-top:4px;"
+    "}"
+
+    ".card{"
+    "background:linear-gradient(180deg,#0d141e,#080c12);"
+    "border:1px solid #1b2633;"
+    "border-radius:10px;"
+    "padding:14px;"
+    "min-height:105px;"
+    "}"
+
+    ".label{"
+    "font:700 .67rem monospace;"
+    "letter-spacing:1px;"
+    "color:#718096;"
+    "}"
+
+    ".value{"
+    "font:900 1.5rem monospace;"
+    "margin-top:7px;"
+    "color:white;"
+    "}"
+
+    ".green{color:#00ff9d!important;}"
+    ".red{color:#ff3b6b!important;}"
+    ".cyan{color:#00d9ff!important;}"
+    ".purple{color:#b889ff!important;}"
+    ".yellow{color:#ffd166!important;}"
+
+    ".hero{"
+    "background:linear-gradient(135deg,#0e0718,#090e16 55%,#071b19);"
+    "border:1px solid #44206b;"
+    "border-radius:12px;"
+    "padding:20px;"
+    "margin-top:10px;"
+    "box-shadow:0 0 40px rgba(153,69,255,.10);"
+    "}"
+
+    ".score{"
+    "font:900 3.1rem monospace;"
+    "line-height:1;"
+    "}"
+
+    ".meter{"
+    "height:14px;"
+    "background:#171d26;"
+    "border-radius:20px;"
+    "overflow:hidden;"
+    "border:1px solid #283241;"
+    "margin-top:15px;"
+    "}"
+
+    ".meter-inner{"
+    "height:100%;"
+    "background:linear-gradient(90deg,#ff3b6b,#ffd166,#00ff9d);"
+    "}"
+
+    ".section{"
+    "font:800 .76rem monospace;"
+    "color:#8ea3b8;"
+    "letter-spacing:2px;"
+    "margin:20px 0 8px;"
+    "}"
+
+    ".signal{"
+    "border-left:3px solid #00d9ff;"
+    "padding:10px 12px;"
+    "background:#081018;"
+    "border-radius:5px;"
+    "margin:7px 0;"
+    "font:700 .76rem monospace;"
+    "}"
+
+    ".signal-good{"
+    "border-left-color:#00ff9d;"
+    "}"
+
+    ".signal-bad{"
+    "border-left-color:#ff3b6b;"
+    "}"
+
+    ".signal-warn{"
+    "border-left-color:#ffd166;"
+    "}"
+
+    ".news{"
+    "border:1px solid #1b2633;"
+    "background:#080d14;"
+    "padding:11px 13px;"
+    "margin:7px 0;"
+    "border-radius:8px;"
+    "}"
+
+    ".news-title{"
+    "font:700 .85rem monospace;"
+    "color:#dbe7f4;"
+    "line-height:1.4;"
+    "}"
+
+    ".news-meta{"
+    "font:600 .65rem monospace;"
+    "color:#5f7184;"
+    "margin-top:5px;"
+    "}"
+
+    ".footer{"
+    "color:#526273;"
+    "font:600 .65rem monospace;"
+    "text-align:center;"
+    "margin-top:25px;"
+    "}"
+
+    "</style>"
+)
+
+st.markdown(CSS, unsafe_allow_html=True)
+
+
+# ============================================================
+# HTTP
+# ============================================================
+
+SESSION = requests.Session()
+
+SESSION.headers.update(
+    {
+        "User-Agent": "SolanaRadar/2.0"
+    }
+)
+
+
+def get_json(url, params=None, timeout=5):
     try:
-        response = requests.get(
+        response = SESSION.get(
             url,
             params=params,
-            headers=HEADERS,
-            timeout=timeout,
+            timeout=timeout
         )
 
-        if response.status_code != 200:
-            return None
+        response.raise_for_status()
 
         return response.json()
 
@@ -69,661 +242,952 @@ def api_json(url, params=None, timeout=TIMEOUT):
         return None
 
 
-def clamp(value, low=0, high=100):
-    return max(low, min(high, float(value)))
+def get_text(url, timeout=4):
+    try:
+        response = SESSION.get(
+            url,
+            timeout=timeout
+        )
 
+        response.raise_for_status()
 
-def fmt_price(value):
-    if value is None:
-        return "N/D"
+        return response.text
 
-    if value >= 1000:
-        return f"${value:,.0f}"
-
-    if value >= 1:
-        return f"${value:,.2f}"
-
-    return f"${value:,.5f}"
-
-
-def clean_text(value):
-    if not value:
+    except Exception:
         return ""
 
-    value = re.sub(r"<[^>]+>", " ", value)
-    value = html.unescape(value)
-    value = re.sub(r"\s+", " ", value)
-
-    return value.strip()
-
 
 # ============================================================
-# MARKET DATA - BINANCE
+# MARKET DATA
 # ============================================================
 
-def get_ticker(symbol):
-    data = api_json(
-        "https://api.binance.com/api/v3/ticker/24hr",
-        {"symbol": symbol},
+@st.cache_data(ttl=20, show_spinner=False)
+def get_market_data():
+
+    data = get_json(
+        "https://api.coingecko.com/api/v3/simple/price",
+        {
+            "ids": "solana,bitcoin,ethereum",
+            "vs_currencies": "usd",
+            "include_24hr_change": "true",
+            "include_24hr_vol": "true",
+            "include_market_cap": "true",
+        },
+        timeout=5
     )
 
     if not data:
-        return None
-
-    try:
-        return {
-            "price": float(data["lastPrice"]),
-            "change": float(data["priceChangePercent"]),
-            "volume": float(data["quoteVolume"]),
-            "high": float(data["highPrice"]),
-            "low": float(data["lowPrice"]),
-        }
-
-    except Exception:
-        return None
-
-
-def get_klines(
-    symbol="SOLUSDT",
-    interval="1h",
-    limit=200,
-):
-    data = api_json(
-        "https://api.binance.com/api/v3/klines",
-        {
-            "symbol": symbol,
-            "interval": interval,
-            "limit": limit,
-        },
-    )
-
-    if isinstance(data, list):
-        return data
-
-    return []
-
-
-# ============================================================
-# TECHNICAL INDICATORS
-# ============================================================
-
-def sma(values, period):
-    if len(values) < period:
-        return None
-
-    return sum(values[-period:]) / period
-
-
-def ema(values, period):
-    if len(values) < period:
-        return None
-
-    multiplier = 2 / (period + 1)
-
-    result = sum(values[:period]) / period
-
-    for price in values[period:]:
-        result = (
-            (price - result) * multiplier
-            + result
-        )
-
-    return result
-
-
-def rsi(values, period=14):
-    if len(values) < period + 1:
-        return None
-
-    gains = []
-    losses = []
-
-    for i in range(1, len(values)):
-
-        difference = (
-            values[i]
-            - values[i - 1]
-        )
-
-        gains.append(
-            max(difference, 0)
-        )
-
-        losses.append(
-            max(-difference, 0)
-        )
-
-    avg_gain = (
-        sum(gains[-period:])
-        / period
-    )
-
-    avg_loss = (
-        sum(losses[-period:])
-        / period
-    )
-
-    if avg_loss == 0:
-        return 100.0
-
-    rs = avg_gain / avg_loss
-
-    return 100 - (
-        100 / (1 + rs)
-    )
-
-
-def macd(values):
-    if len(values) < 35:
-        return None, None
-
-    fast = ema(values, 12)
-    slow = ema(values, 26)
-
-    if fast is None or slow is None:
-        return None, None
-
-    macd_line = fast - slow
-
-    return macd_line, None
-
-
-def technical_vector(candles):
-
-    if len(candles) < 60:
 
         return {
-            "score": 0,
-            "rsi": None,
-            "sma20": None,
-            "sma50": None,
-            "ema20": None,
-            "macd": None,
-            "volume_ratio": None,
-            "prices": [],
+            "ok": False,
+            "sol": {
+                "price": 0,
+                "change": 0,
+                "volume": 0,
+                "cap": 0
+            },
+            "btc": {
+                "price": 0,
+                "change": 0,
+                "volume": 0,
+                "cap": 0
+            },
+            "eth": {
+                "price": 0,
+                "change": 0,
+                "volume": 0,
+                "cap": 0
+            }
         }
 
-    closes = [
-        float(x[4])
-        for x in candles
-    ]
 
-    volumes = [
-        float(x[5])
-        for x in candles
-    ]
+    def parse_coin(name):
 
-    last = closes[-1]
+        item = data.get(name, {})
 
-    sma20 = sma(
-        closes,
-        20,
-    )
+        return {
+            "price": float(item.get("usd", 0)),
+            "change": float(item.get("usd_24h_change", 0)),
+            "volume": float(item.get("usd_24h_vol", 0)),
+            "cap": float(item.get("usd_market_cap", 0))
+        }
 
-    sma50 = sma(
-        closes,
-        50,
-    )
-
-    ema20 = ema(
-        closes,
-        20,
-    )
-
-    current_rsi = rsi(
-        closes,
-        14,
-    )
-
-    macd_line, _ = macd(
-        closes
-    )
-
-    average_volume = (
-        sum(volumes[-20:])
-        / 20
-    )
-
-    if average_volume:
-        volume_ratio = (
-            volumes[-1]
-            / average_volume
-        )
-    else:
-        volume_ratio = 1
-
-    score = 0
-
-    # Precio frente a SMA20
-    if sma20 is not None:
-
-        if last > sma20:
-            score += 10
-        else:
-            score -= 10
-
-    # Precio frente a SMA50
-    if sma50 is not None:
-
-        if last > sma50:
-            score += 12
-        else:
-            score -= 12
-
-    # Cruce SMA20 / SMA50
-    if (
-        sma20 is not None
-        and sma50 is not None
-    ):
-
-        if sma20 > sma50:
-            score += 10
-        else:
-            score -= 10
-
-    # EMA20
-    if ema20 is not None:
-
-        if last > ema20:
-            score += 6
-        else:
-            score -= 6
-
-    # RSI
-    if current_rsi is not None:
-
-        if 52 <= current_rsi <= 68:
-            score += 8
-
-        elif current_rsi >= 75:
-            score -= 8
-
-        elif current_rsi <= 30:
-            score += 5
-
-    # MACD
-    if macd_line is not None:
-
-        if macd_line > 0:
-            score += 6
-        else:
-            score -= 6
-
-    # Volumen
-    if volume_ratio >= 1.25:
-
-        if last >= (
-            sma20
-            if sma20 is not None
-            else last
-        ):
-            score += 5
-        else:
-            score -= 5
 
     return {
-        "score": score,
-        "rsi": current_rsi,
-        "sma20": sma20,
-        "sma50": sma50,
-        "ema20": ema20,
-        "macd": macd_line,
-        "volume_ratio": volume_ratio,
-        "prices": closes[-100:],
+        "ok": True,
+        "sol": parse_coin("solana"),
+        "btc": parse_coin("bitcoin"),
+        "eth": parse_coin("ethereum")
     }
 
 
 # ============================================================
-# FEAR & GREED
+# BINANCE TECHNICAL DATA
 # ============================================================
 
-def get_fear_greed():
+@st.cache_data(ttl=30, show_spinner=False)
+def get_binance_data():
 
-    data = api_json(
-        "https://api.alternative.me/fng/?limit=1"
+    data = get_json(
+        "https://api.binance.com/api/v3/klines",
+        {
+            "symbol": "SOLUSDT",
+            "interval": "15m",
+            "limit": 96
+        },
+        timeout=5
     )
 
-    try:
-
-        item = data["data"][0]
+    if not data or len(data) < 30:
 
         return {
-            "value": int(
-                item["value"]
-            ),
-            "label": item[
-                "value_classification"
-            ],
-        }
-
-    except Exception:
-
-        return {
-            "value": None,
-            "label": "N/D",
+            "ok": False,
+            "rsi": 50,
+            "momentum": 0,
+            "trend": 0,
+            "price": 0
         }
 
 
-# ============================================================
-# GLOBAL MARKET
-# ============================================================
+    closes = []
 
-def get_global_market():
+    for candle in data:
 
-    data = api_json(
-        "https://api.coingecko.com/api/v3/global"
+        try:
+            closes.append(float(candle[4]))
+        except Exception:
+            pass
+
+
+    if len(closes) < 30:
+
+        return {
+            "ok": False,
+            "rsi": 50,
+            "momentum": 0,
+            "trend": 0,
+            "price": 0
+        }
+
+
+    # -------------------------
+    # RSI
+    # -------------------------
+
+    gains = []
+    losses = []
+
+    for i in range(1, len(closes)):
+
+        difference = closes[i] - closes[i - 1]
+
+        if difference >= 0:
+
+            gains.append(difference)
+            losses.append(0)
+
+        else:
+
+            gains.append(0)
+            losses.append(abs(difference))
+
+
+    avg_gain = sum(gains[-14:]) / 14
+    avg_loss = sum(losses[-14:]) / 14
+
+
+    if avg_loss == 0:
+
+        rsi = 100
+
+    else:
+
+        relative_strength = avg_gain / avg_loss
+
+        rsi = 100 - (
+            100 / (1 + relative_strength)
+        )
+
+
+    # -------------------------
+    # Momentum
+    # -------------------------
+
+    short_average = sum(closes[-6:]) / 6
+    long_average = sum(closes[-24:]) / 24
+
+    if long_average != 0:
+
+        momentum = (
+            (short_average / long_average) - 1
+        ) * 100
+
+    else:
+
+        momentum = 0
+
+
+    trend = max(
+        -100,
+        min(
+            100,
+            momentum * 25
+        )
     )
 
-    try:
 
-        obj = data["data"]
-
-        return {
-            "btc_dominance": float(
-                obj[
-                    "market_cap_percentage"
-                ]["btc"]
-            ),
-            "change": float(
-                obj[
-                    "market_cap_change_percentage_24h_usd"
-                ]
-            ),
-        }
-
-    except Exception:
-
-        return {
-            "btc_dominance": None,
-            "change": None,
-        }
+    return {
+        "ok": True,
+        "rsi": rsi,
+        "momentum": momentum,
+        "trend": trend,
+        "price": closes[-1]
+    }
 
 
 # ============================================================
-# NEWS ENGINE
+# NEWS
 # ============================================================
 
-NEWS_QUERIES = [
-    "Solana SOL crypto",
-    "Solana ETF institutional",
-    "Solana network upgrade",
-    "SEC crypto regulation",
-    "Federal Reserve crypto interest rates",
-    "Bitcoin crypto market",
-    "crypto hack exploit liquidation",
-    "tariffs inflation markets crypto",
+RSS_FEEDS = [
+
+    (
+        "CoinDesk",
+        "https://www.coindesk.com/arc/outboundfeeds/rss/"
+    ),
+
+    (
+        "Cointelegraph",
+        "https://cointelegraph.com/rss"
+    ),
+
+    (
+        "Decrypt",
+        "https://decrypt.co/feed"
+    ),
+
+    (
+        "Google News",
+        "https://news.google.com/rss/search?q=Solana%20crypto&hl=en-US&gl=US&ceid=US:en"
+    )
+
 ]
 
 
-POSITIVE_TERMS = [
+@st.cache_data(ttl=180, show_spinner=False)
+def get_news():
+
+    collected = []
+
+
+    for source, url in RSS_FEEDS:
+
+        raw = get_text(
+            url,
+            timeout=4
+        )
+
+        if not raw:
+            continue
+
+
+        try:
+
+            root = ET.fromstring(raw)
+
+        except Exception:
+
+            continue
+
+
+        items = root.findall(".//item")
+
+
+        for item in items[:12]:
+
+            title = (
+                item.findtext("title")
+                or ""
+            ).strip()
+
+            link = (
+                item.findtext("link")
+                or ""
+            ).strip()
+
+            date = (
+                item.findtext("pubDate")
+                or ""
+            ).strip()
+
+
+            if title:
+
+                collected.append(
+                    {
+                        "source": source,
+                        "title": title,
+                        "link": link,
+                        "date": date
+                    }
+                )
+
+
+    # -------------------------
+    # Ranking de relevancia
+    # -------------------------
+
+    keywords = [
+
+        "solana",
+        "sol",
+        "etf",
+        "sec",
+        "fed",
+        "fomc",
+        "inflation",
+        "rates",
+        "bitcoin",
+        "crypto",
+        "tariff",
+        "trump",
+        "hack",
+        "exploit",
+        "liquidation",
+        "defi",
+        "stablecoin",
+        "regulation",
+        "jobs",
+        "cpi"
+
+    ]
+
+
+    def relevance(item):
+
+        title = item["title"].lower()
+
+        score = 0
+
+        for keyword in keywords:
+
+            if keyword in title:
+
+                score += 2
+
+
+        if "solana" in title:
+
+            score += 5
+
+
+        return score
+
+
+    collected.sort(
+        key=relevance,
+        reverse=True
+    )
+
+
+    return collected[:25]
+
+
+# ============================================================
+# SENTIMENT
+# ============================================================
+
+POSITIVE_WORDS = [
+
     "approval",
     "approved",
-    "etf",
-    "inflow",
     "bullish",
-    "adoption",
     "surge",
     "rally",
+    "inflow",
+    "adoption",
+    "partnership",
+    "record",
+    "launch",
     "growth",
     "rate cut",
+    "cuts",
+    "etf",
+    "buy",
+    "accumulation",
     "institutional",
-    "investment",
-    "partnership",
-    "integration",
-    "record",
-    "upgrade",
-    "launch",
-    "positive",
+    "upgrade"
+
 ]
 
 
-NEGATIVE_TERMS = [
+NEGATIVE_WORDS = [
+
     "hack",
     "exploit",
-    "ban",
+    "outflow",
     "lawsuit",
-    "dump",
+    "ban",
+    "bearish",
     "crash",
-    "collapse",
-    "war",
-    "tariff",
-    "inflation",
-    "hawkish",
+    "dump",
     "liquidation",
     "fraud",
     "attack",
-    "drain",
-    "recession",
-    "outflow",
-    "negative",
-    "delay",
+    "downgrade",
+    "tariff",
+    "inflation",
+    "higher rates",
+    "rate hike",
+    "sell",
+    "bankruptcy"
+
 ]
 
 
-def classify_news(title):
-
-    low = title.lower()
-
-    positive = sum(
-        term in low
-        for term in POSITIVE_TERMS
-    )
-
-    negative = sum(
-        term in low
-        for term in NEGATIVE_TERMS
-    )
-
-    if positive > negative:
-        return "POSITIVE"
-
-    if negative > positive:
-        return "NEGATIVE"
-
-    return "NEUTRAL"
-
-
-def fetch_news(query):
-
-    url = (
-        "https://news.google.com/rss/search?q="
-        + quote_plus(query)
-        + "&hl=en-US&gl=US&ceid=US:en"
-    )
-
-    try:
-
-        response = requests.get(
-            url,
-            headers=HEADERS,
-            timeout=TIMEOUT,
-        )
-
-        if response.status_code != 200:
-            return []
-
-        root = ET.fromstring(
-            response.content
-        )
-
-        result = []
-
-        items = root.findall(
-            "./channel/item"
-        )[:7]
-
-        for item in items:
-
-            title = clean_text(
-                item.findtext(
-                    "title",
-                    "",
-                )
-            )
-
-            link = item.findtext(
-                "link",
-                "",
-            )
-
-            pub_date = item.findtext(
-                "pubDate",
-                "",
-            )
-
-            if not title:
-                continue
-
-            result.append(
-                {
-                    "title": title,
-                    "link": link,
-                    "date": pub_date,
-                    "sentiment": classify_news(
-                        title
-                    ),
-                }
-            )
-
-        return result
-
-    except Exception:
-
-        return []
-
-
-def collect_news():
-
-    all_items = []
-
-    with ThreadPoolExecutor(
-        max_workers=8
-    ) as executor:
-
-        futures = [
-            executor.submit(
-                fetch_news,
-                query,
-            )
-            for query in NEWS_QUERIES
-        ]
-
-        for future in as_completed(
-            futures
-        ):
-
-            try:
-
-                all_items.extend(
-                    future.result()
-                )
-
-            except Exception:
-                pass
-
-    unique = {}
-
-    for item in all_items:
-
-        key = item[
-            "title"
-        ].lower()
-
-        if key not in unique:
-            unique[key] = item
-
-    return list(
-        unique.values()
-    )[:35]
-
-
-def news_vector(news):
+def calculate_news_score(news):
 
     score = 0
 
+
     for item in news:
 
-        if (
-            item["sentiment"]
-            == "POSITIVE"
-        ):
-            score += 2
+        title = item["title"].lower()
 
-        elif (
-            item["sentiment"]
-            == "NEGATIVE"
-        ):
-            score -= 2
+        positive = 0
+        negative = 0
+
+
+        for word in POSITIVE_WORDS:
+
+            if word in title:
+
+                positive += 1
+
+
+        for word in NEGATIVE_WORDS:
+
+            if word in title:
+
+                negative += 1
+
+
+        item_score = (
+            positive - negative
+        ) * 4
+
+
+        item_score = max(
+            -10,
+            min(
+                10,
+                item_score
+            )
+        )
+
+
+        score += item_score
+
 
     return max(
-        -20,
+        -100,
         min(
-            20,
-            score,
-        ),
+            100,
+            score
+        )
     )
 
 
 # ============================================================
-# SOL VS BTC
+# SIGNAL ENGINE
 # ============================================================
 
-def relative_strength(
-    sol,
-    btc,
+def clamp(value, minimum, maximum):
+
+    return max(
+        minimum,
+        min(
+            maximum,
+            value
+        )
+    )
+
+
+def calculate_signal(
+    market,
+    technical,
+    news
 ):
 
-    if not sol or not btc:
-        return 0
-
-    sol_change = sol[
-        "change"
-    ]
-
-    btc_change = btc[
-        "change"
-    ]
-
-    difference = (
-        sol_change
-        - btc_change
+    news_score = calculate_news_score(
+        news
     )
 
-    if difference > 3:
-        return 7
 
-    if difference > 1:
-        return 4
+    sol_change = market["sol"]["change"]
+    btc_change = market["btc"]["change"]
+    eth_change = market["eth"]["change"]
 
-    if difference < -3:
-        return -7
 
-    if difference < -1:
-        return -4
+    # -------------------------
+    # Market momentum
+    # -------------------------
 
-    return 0
+    sol_component = clamp(
+        sol_change * 5,
+        -25,
+        25
+    )
+
+
+    btc_component = clamp(
+        btc_change * 2,
+        -12,
+        12
+    )
+
+
+    eth_component = clamp(
+        eth_change * 1.5,
+        -8,
+        8
+    )
+
+
+    # -------------------------
+    # Technical
+    # -------------------------
+
+    if technical["ok"]:
+
+        technical_component = clamp(
+            technical["trend"] * 0.35,
+            -20,
+            20
+        )
+
+    else:
+
+        technical_component = 0
+
+
+    # -------------------------
+    # RSI
+    # -------------------------
+
+    rsi_component = 0
+
+
+    if technical["ok"]:
+
+        rsi = technical["rsi"]
+
+
+        if rsi < 30:
+
+            rsi_component = 10
+
+        elif rsi > 70:
+
+            rsi_component = -10
+
+        elif rsi < 45:
+
+            rsi_component = 4
+
+        elif rsi > 55:
+
+            rsi_component = -4
+
+
+    # -------------------------
+    # Final score
+    # -------------------------
+
+    score = (
+
+        50
+
+        + news_score * 0.20
+
+        + sol_component * 0.35
+
+        + btc_component * 0.35
+
+        + eth_component * 0.25
+
+        + technical_component * 0.55
+
+        + rsi_component * 0.45
+
+    )
+
+
+    score = clamp(
+        score,
+        5,
+        95
+    )
+
+
+    # -------------------------
+    # Data confidence
+    # -------------------------
+
+    confidence = 0
+
+
+    if market["ok"]:
+
+        confidence += 35
+
+
+    if technical["ok"]:
+
+        confidence += 35
+
+
+    confidence += min(
+        30,
+        len(news) * 2
+    )
+
+
+    confidence = clamp(
+        confidence,
+        20,
+        95
+    )
+
+
+    return {
+
+        "up": round(
+            score,
+            1
+        ),
+
+        "down": round(
+            100 - score,
+            1
+        ),
+
+        "confidence": round(
+            confidence
+        ),
+
+        "news": round(
+            news_score
+        ),
+
+        "technical": round(
+            technical_component
+        ),
+
+        "rsi": round(
+            technical["rsi"],
+            1
+        ),
+
+        "momentum": round(
+            technical["momentum"],
+            3
+        )
+
+    }
 
 
 # ============================================================
-# COMPLETE SCAN
+# TELEGRAM
 # ============================================================
 
-def run_scan():
+def send_telegram(message):
 
-    start = datetime.now(
-        timezone.utc
+    if not TELEGRAM_TOKEN:
+
+        return (
+            False,
+            "TELEGRAM_TOKEN no configurado"
+        )
+
+
+    if not TELEGRAM_CHAT_ID:
+
+        return (
+            False,
+            "TELEGRAM_CHAT_ID no configurado"
+        )
+
+
+    try:
+
+        url = (
+            "https://api.telegram.org/bot"
+            + TELEGRAM_TOKEN
+            + "/sendMessage"
+        )
+
+
+        response = SESSION.post(
+
+            url,
+
+            data={
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": message
+            },
+
+            timeout=8
+
+        )
+
+
+        if response.ok:
+
+            return (
+                True,
+                "Telegram enviado correctamente"
+            )
+
+
+        return (
+            False,
+            "Telegram HTTP "
+            + str(response.status_code)
+        )
+
+
+    except Exception as error:
+
+        return (
+            False,
+            "Error Telegram: "
+            + str(error)
+        )
+
+
+# ============================================================
+# LOAD DATA
+# ============================================================
+
+market = get_market_data()
+
+technical = get_binance_data()
+
+news = get_news()
+
+
+signal = calculate_signal(
+
+    market,
+    technical,
+    news
+
+)
+
+
+sol = market["sol"]
+btc = market["btc"]
+eth = market["eth"]
+
+
+now = datetime.now(
+    timezone.utc
+).strftime(
+    "%Y-%m-%d %H:%M:%S UTC"
+)
+
+
+# ============================================================
+# HEADER
+# ============================================================
+
+st.markdown(
+
+    '<div class="topbar">'
+    '<div class="brand">'
+    '⚡ SOLANA RADAR // TRADER CORE'
+    '</div>'
+    '<div class="sub">'
+    'MULTI-VECTOR MARKET SCANNER · LIVE MARKET DATA · '
+    + now +
+    '</div>'
+    '</div>',
+
+    unsafe_allow_html=True
+
+)
+
+
+# ============================================================
+# TOP CARDS
+# ============================================================
+
+col1, col2, col3, col4 = st.columns(4)
+
+
+with col1:
+
+    color = (
+        "green"
+        if sol["change"] >= 0
+        else "red"
     )
 
-    jobs = {
-        "sol": lambda: get_ticker(
-            "SOLUSDT"
-        ),
-        "btc": lambda: get_ticker(
-            "BTCUSDT"
-        ),
-        "eth": lambda: get_ticker(
-            "ETHUSDT"
-        ),
-        "candles": lambda: get_klines(
-            "SOLUSDT",
-            "
+    st.markdown(
+
+        '<div class="card">'
+        '<div class="label">SOL / USD</div>'
+        '<div class="value purple">$'
+        + f"{sol['price']:,.2f}"
+        + '</div>'
+        '<div class="'
+        + color +
+        ' mono">'
+        + f"{sol['change']:+.2f}% 24H"
+        + '</div>'
+        '</div>',
+
+        unsafe_allow_html=True
+
+    )
+
+
+with col2:
+
+    color = (
+        "green"
+        if btc["change"] >= 0
+        else "red"
+    )
+
+    st.markdown(
+
+        '<div class="card">'
+        '<div class="label">BTC / USD</div>'
+        '<div class="value">$'
+        + f"{btc['price']:,.0f}"
+        + '</div>'
+        '<div class="'
+        + color +
+        ' mono">'
+        + f"{btc['change']:+.2f}% 24H"
+        + '</div>'
+        '</div>',
+
+        unsafe_allow_html=True
+
+    )
+
+
+with col3:
+
+    color = (
+        "green"
+        if eth["change"] >= 0
+        else "red"
+    )
+
+    st.markdown(
+
+        '<div class="card">'
+        '<div class="label">ETH / USD</div>'
+        '<div class="value">$'
+        + f"{eth['price']:,.0f}"
+        + '</div>'
+        '<div class="'
+        + color +
+        ' mono">'
+        + f"{eth['change']:+.2f}% 24H"
+        + '</div>'
+        '</div>',
+
+        unsafe_allow_html=True
+
+    )
+
+
+with col4:
+
+    st.markdown(
+
+        '<div class="card">'
+        '<div class="label">DATA CONFIDENCE</div>'
+        '<div class="value">'
+        + str(signal["confidence"])
+        + '%'
+        '</div>'
+        '<div class="cyan mono">'
+        'LIVE DATA COVERAGE'
+        '</div>'
+        '</div>',
+
+        unsafe_allow_html=True
+
+    )
+
+
+# ============================================================
+# MAIN SIGNAL
+# ============================================================
+
+st.markdown(
+
+    '<div class="section">'
+    '01 // SOLANA DIRECTION ENGINE'
+    '</div>',
+
+    unsafe_allow_html=True
+
+)
+
+
+if signal["up"] >= signal["down"]:
+
+    direction = "SUBIDA"
+
+    direction_color = "green"
+
+else:
+
+    direction = "BAJADA"
+
+    direction_color = "red"
+
+
+st.markdown(
+
+    '<div class="hero">'
+
+    '<div class="label">'
+    'PROBABILIDAD MODELO · NO ES GARANTÍA'
+    '</div>'
+
+    '<div style="display:flex;'
+    'justify-content:space-between;'
+    'align-items:end;'
+    'gap:20px;'
+    'flex-wrap:wrap;">'
+
+    '<div>'
+
+    '<div class="score '
+    + direction_color +
+    '">'
+
+    + str(signal["up"])
+    + '%'
+
+    + '</div>'
+
+    '<div class="'
+    + direction_color +
+    ' mono">'
+
+    'CHANCE MODELO DE SUBIDA'
+
+    '</div>'
+
+    '</div>'
+
+    '<div c
