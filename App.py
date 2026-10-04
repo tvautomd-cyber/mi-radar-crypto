@@ -728,4 +728,136 @@ st.markdown(
 
 st.markdown(
     "<div class='header-sub'>"
-    "MULTI-SOURCE INT
+    "MULTI-SOURCE INTELLIGENCE & MACRO RADAR V2.0</div>",
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# MAIN EXECUTION & DASHBOARD LAYOUT
+# ============================================================
+
+market = get_market_data()
+futures = get_futures_data()
+fear_value, fear_label = get_fear_greed()
+news_articles = get_global_news()
+
+score, confidence, reasons = calculate_signal(
+    market,
+    futures,
+    fear_value,
+    len(news_articles)
+)
+
+# Sidebar para alertas de Telegram y controles
+with st.sidebar:
+    st.markdown("### ⚙️ Panel de Control")
+    st.write(f"Estado de Telegram: {'✅ Configurado' if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID else '⚠️ No Configurado'}")
+    
+    custom_msg = st.text_input("Mensaje personalizado", "Radar alerta manual")
+    if st.button("Enviar Alerta a Telegram"):
+        success, msg = send_telegram(custom_msg)
+        if success:
+            st.success(msg)
+        else:
+            st.error(msg)
+            
+    if st.button("Enviar Señal Actual"):
+        signal_text = f"🟣 SOL VECTOR RADAR\nScore: {score:.1f}/100\nConfianza: {confidence}%\nPrecio SOL: ${market['sol']}"
+        success, msg = send_telegram(signal_text)
+        if success:
+            st.success("Señal enviada a Telegram.")
+        else:
+            st.error(msg)
+
+    st.markdown("---")
+    if st.button("🔄 Refrescar Datos"):
+        st.cache_data.clear()
+        st.rerun()
+
+# Pestañas principales
+tab1, tab2 = st.tabs(["📊 Radar & Métricas", "📰 Noticias Globales"])
+
+with tab1:
+    col1, col2 = st.columns([1.2, 1.8], gap="medium")
+    
+    with col1:
+        st.markdown("<div class='signal-box'>", unsafe_allow_html=True)
+        st.markdown("### 🎯 Vector Signal Engine", unsafe_allow_html=True)
+        
+        color_class = "green" if score >= 60 else ("red" if score <= 40 else "purple")
+        st.markdown(f"<div class='big-number {color_class}'>{score:.1f} <span style='font-size:16px;color:#7c8797;'>/100</span></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-label'>CONFIANZA: {confidence}%</div>", unsafe_allow_html=True)
+        
+        st.markdown("<br><b>Factores Clave:</b>", unsafe_allow_html=True)
+        if reasons:
+            for r in reasons:
+                st.markdown(f"- {r}")
+        else:
+            st.markdown("- Mercado en rango / sin catalizadores fuertes")
+            
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    with col2:
+        st.markdown("<div class='terminal'>", unsafe_allow_html=True)
+        st.markdown("### 📊 Métricas del Mercado", unsafe_allow_html=True)
+        
+        m_cols = st.columns(3)
+        with m_cols[0]:
+            st.metric("Solana (SOL)", f"${market['sol']:,.2f}", f"{market['sol_change']:+.2f}%")
+        with m_cols[1]:
+            st.metric("Bitcoin (BTC)", f"${market['btc']:,.2f}", f"{market['btc_change']:+.2f}%")
+        with m_cols[2]:
+            st.metric("Ethereum (ETH)", f"${market['eth']:,.2f}", f"{market['eth_change']:+.2f}%")
+            
+        st.markdown("<hr style='border-color:#202733;'>", unsafe_allow_html=True)
+        
+        f_cols = st.columns(3)
+        with f_cols[0]:
+            st.metric("Open Interest", f"${futures['open_interest']:,.0f}")
+        with f_cols[1]:
+            st.metric("Funding Rate", f"{futures['funding']:.4f}%")
+        with f_cols[2]:
+            st.metric("Fear & Greed", f"{fear_value} ({fear_label})")
+            
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='terminal'>", unsafe_allow_html=True)
+    st.markdown("### ⚡ Derivados Binance Futures (SOLUSDT)", unsafe_allow_html=True)
+    
+    d_cols = st.columns(4)
+    with d_cols[0]:
+        st.metric("Volume 24h", f"${market['sol_volume']:,.0f}")
+    with d_cols[1]:
+        st.metric("Ratio Long / Short", f"L: {futures['long_pct']:.1f}% / S: {futures['short_pct']:.1f}%")
+    with d_cols[2]:
+        st.metric("Taker Buy/Sell Ratio", f"{futures['taker_ratio']:.2f}")
+    with d_cols[3]:
+        st.metric("Cambio 24h (Futures)", f"{futures['change']:+.2f}%")
+        
+    st.markdown("</div>", unsafe_allow_html=True)
+
+with tab2:
+    st.markdown("<div class='terminal'>", unsafe_allow_html=True)
+    st.markdown("### 📰 Últimas Noticias Globales y Cripto", unsafe_allow_html=True)
+    
+    if not news_articles:
+        st.info("No se pudieron cargar las noticias en este momento o la red está limitada.")
+    else:
+        for article in news_articles:
+            st.markdown(
+                f"<div class='news-row'>"
+                f"<a href='{article['link']}' target='_blank' style='color:#f5f7fa;text-decoration:none;font-weight:600;'>{html.escape(article['title'])}</a>"
+                f"<div class='source'>{html.escape(article['source'])} &bull; <span class='tiny'>{html.escape(article['date'])}</span></div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+            
+    st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown(
+    "<div style='text-align:center;color:#697586;font-size:11px;margin-top:30px;letter-spacing:1px;'>"
+    "SOL VECTOR RADAR &bull; Creado para Streamlit Cloud &bull; Sin dependencias pesadas de gráficos"
+    "</div>",
+    unsafe_allow_html=True
+)
