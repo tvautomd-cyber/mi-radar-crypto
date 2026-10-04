@@ -5,14 +5,15 @@ import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from urllib.parse import quote_plus
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ============================================================
-# SOL RADAR V3
-# Fast startup / no Plotly / resilient APIs
+# SOL RADAR V4
+# FAST / PARALLEL / FAIL-SAFE
 # ============================================================
 
 st.set_page_config(
-    page_title="SOL RADAR // V3",
+    page_title="SOL RADAR // V4",
     page_icon="🟣",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -22,20 +23,18 @@ st.set_page_config(
 # CONFIG
 # ============================================================
 
-REQUEST_TIMEOUT = 5
+TIMEOUT = 3
 
-session = requests.Session()
-
-session.headers.update({
-    "User-Agent": "Mozilla/5.0 SOL-RADAR-V3"
-})
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 SOL-RADAR-V4"
+}
 
 
 # ============================================================
 # TELEGRAM SECRETS
 # ============================================================
 
-def read_secret(section, key, env_name):
+def get_secret(section, key):
 
     try:
         value = st.secrets[section][key]
@@ -46,211 +45,55 @@ def read_secret(section, key, env_name):
     except Exception:
         pass
 
-    try:
-        import os
+    return ""
 
-        return os.getenv(
-            env_name,
-            ""
-        ).strip()
+
+TELEGRAM_TOKEN = get_secret(
+    "telegram",
+    "token"
+)
+
+TELEGRAM_CHAT_ID = get_secret(
+    "telegram",
+    "chat_id"
+)
+
+
+# ============================================================
+# SESSION
+# ============================================================
+
+def request_json(url, params=None):
+
+    try:
+
+        r = requests.get(
+            url,
+            params=params,
+            headers=HEADERS,
+            timeout=TIMEOUT
+        )
+
+        if r.status_code != 200:
+            return None
+
+        return r.json()
 
     except Exception:
-        return ""
 
-
-TELEGRAM_TOKEN = read_secret(
-    "telegram",
-    "token",
-    "TELEGRAM_TOKEN"
-)
-
-TELEGRAM_CHAT_ID = read_secret(
-    "telegram",
-    "chat_id",
-    "TELEGRAM_CHAT_ID"
-)
+        return None
 
 
 # ============================================================
-# CSS
+# UTILITIES
 # ============================================================
 
-st.markdown(
-    """
-<style>
-
-.stApp {
-    background:
-        radial-gradient(
-            circle at 85% 5%,
-            rgba(115, 40, 255, 0.16),
-            transparent 28%
-        ),
-        radial-gradient(
-            circle at 10% 20%,
-            rgba(0, 180, 255, 0.07),
-            transparent 25%
-        ),
-        #05070b;
-
-    color: #d7d9e0;
-}
-
-.block-container {
-    max-width: 1500px;
-    padding-top: 1rem;
-}
-
-h1, h2, h3 {
-    font-family:
-        "Courier New",
-        Consolas,
-        monospace !important;
-}
-
-.title {
-    font-family:
-        "Courier New",
-        Consolas,
-        monospace;
-
-    color: #b875ff;
-    font-size: 2.4rem;
-    font-weight: 800;
-
-    text-shadow:
-        0 0 12px rgba(150, 70, 255, 0.7);
-}
-
-.subtitle {
-    color: #596273;
-    font-family:
-        "Courier New",
-        monospace;
-    letter-spacing: 2px;
-}
-
-.radar-card {
-    background:
-        linear-gradient(
-            145deg,
-            #0b0d14,
-            #100a1d
-        );
-
-    border:
-        1px solid #6835c8;
-
-    border-radius: 16px;
-
-    padding: 24px;
-
-    box-shadow:
-        0 0 35px
-        rgba(115, 50, 255, 0.12),
-
-        inset 0 0 30px
-        rgba(115, 50, 255, 0.04);
-}
-
-.signal {
-    background: #090c12;
-    border: 1px solid #202633;
-    border-radius: 10px;
-    padding: 14px;
-}
-
-.news-card {
-    background: #080b10;
-    border-left: 3px solid #854cff;
-    border-radius: 5px;
-    padding: 12px;
-    margin-bottom: 8px;
-}
-
-.news-positive {
-    border-left-color: #00ff88;
-}
-
-.news-negative {
-    border-left-color: #ff4260;
-}
-
-.small {
-    color: #697284;
-    font-size: 0.76rem;
-}
-
-.green {
-    color: #00ff88 !important;
-}
-
-.red {
-    color: #ff4260 !important;
-}
-
-.yellow {
-    color: #ffc857 !important;
-}
-
-.purple {
-    color: #b875ff !important;
-}
-
-.big-number {
-    font-size: 2.5rem;
-    font-weight: 800;
-    font-family:
-        "Courier New",
-        monospace;
-}
-
-.progress-bg {
-    background: #171b24;
-    height: 15px;
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-.progress-up {
-    background: #00e878;
-    height: 100%;
-}
-
-.progress-down {
-    background: #ff3454;
-    height: 100%;
-}
-
-.footer {
-    color: #454c5b;
-    text-align: center;
-    font-size: 0.72rem;
-    font-family:
-        "Courier New",
-        monospace;
-}
-
-</style>
-""",
-    unsafe_allow_html=True
-)
-
-
-# ============================================================
-# UTILS
-# ============================================================
-
-def clamp(
-    value,
-    minimum=5,
-    maximum=95
-):
+def clamp(value, low=5, high=95):
 
     return max(
-        minimum,
+        low,
         min(
-            maximum,
+            high,
             int(round(value))
         )
     )
@@ -259,44 +102,21 @@ def clamp(
 def money(value):
 
     if value is None:
-        return "—"
+        return "N/D"
 
     if abs(value) >= 1000:
-
         return f"${value:,.0f}"
 
     return f"${value:,.4f}"
 
 
-def api_json(
-    url,
-    params=None,
-    timeout=REQUEST_TIMEOUT
-):
-
-    try:
-
-        response = session.get(
-            url,
-            params=params,
-            timeout=timeout
-        )
-
-        response.raise_for_status()
-
-        return response.json()
-
-    except Exception:
-
-        return None
-
-
 def clean_text(text):
 
-    text = text or ""
+    if not text:
+        return ""
 
     text = re.sub(
-        r"<[^>]*>",
+        r"<[^>]+>",
         " ",
         text
     )
@@ -313,12 +133,183 @@ def clean_text(text):
 
 
 # ============================================================
-# BINANCE PRICE
+# CSS
 # ============================================================
 
-def get_market(symbol):
+st.markdown(
+    """
+<style>
 
-    data = api_json(
+.stApp {
+    background:
+        radial-gradient(
+            circle at 85% 5%,
+            rgba(120,40,255,.18),
+            transparent 28%
+        ),
+        radial-gradient(
+            circle at 10% 30%,
+            rgba(0,170,255,.07),
+            transparent 25%
+        ),
+        #040609;
+
+    color:#d9dce4;
+}
+
+.block-container {
+    max-width:1500px;
+    padding-top:1rem;
+}
+
+.title {
+    font-family:
+        "Courier New",
+        monospace;
+
+    font-size:2.5rem;
+    font-weight:900;
+
+    color:#b86cff;
+
+    text-shadow:
+        0 0 12px
+        rgba(150,70,255,.7);
+}
+
+.subtitle {
+    font-family:
+        "Courier New",
+        monospace;
+
+    color:#596273;
+    letter-spacing:2px;
+}
+
+.card {
+    background:
+        linear-gradient(
+            145deg,
+            #090c12,
+            #12091c
+        );
+
+    border:1px solid #6230bd;
+
+    border-radius:16px;
+
+    padding:22px;
+
+    box-shadow:
+        0 0 30px
+        rgba(110,40,255,.12);
+}
+
+.metric {
+    background:#080b10;
+
+    border:1px solid #202632;
+
+    border-radius:10px;
+
+    padding:14px;
+}
+
+.green {
+    color:#00ff88 !important;
+}
+
+.red {
+    color:#ff4260 !important;
+}
+
+.yellow {
+    color:#ffc857 !important;
+}
+
+.purple {
+    color:#b86cff !important;
+}
+
+.small {
+    color:#697284;
+    font-size:.75rem;
+}
+
+.news {
+    background:#080b10;
+
+    border-left:3px solid #8b4dff;
+
+    padding:11px;
+
+    margin-bottom:7px;
+
+    border-radius:5px;
+}
+
+.news-positive {
+    border-left-color:#00ff88;
+}
+
+.news-negative {
+    border-left-color:#ff4260;
+}
+
+.bar-bg {
+    width:100%;
+    height:15px;
+
+    background:#171b24;
+
+    border-radius:10px;
+
+    overflow:hidden;
+}
+
+.bar-up {
+    height:100%;
+    background:#00e878;
+}
+
+.bar-down {
+    height:100%;
+    background:#ff3454;
+}
+
+.source-ok {
+    color:#00ff88;
+}
+
+.source-fail {
+    color:#ff4260;
+}
+
+.footer {
+    text-align:center;
+
+    color:#414856;
+
+    font-size:.7rem;
+
+    font-family:
+        "Courier New",
+        monospace;
+}
+
+</style>
+""",
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# MARKET DATA
+# ============================================================
+
+def get_binance(symbol):
+
+    data = request_json(
         "https://api.binance.com/api/v3/ticker/24hr",
         {
             "symbol": symbol
@@ -326,7 +317,6 @@ def get_market(symbol):
     )
 
     if not data:
-
         return None
 
     try:
@@ -335,11 +325,9 @@ def get_market(symbol):
             "price": float(
                 data["lastPrice"]
             ),
-
             "change": float(
                 data["priceChangePercent"]
             ),
-
             "volume": float(
                 data["quoteVolume"]
             )
@@ -350,27 +338,18 @@ def get_market(symbol):
         return None
 
 
-# ============================================================
-# CANDLES
-# ============================================================
+def get_candles():
 
-def get_candles(
-    symbol="SOLUSDT",
-    interval="1h",
-    limit=100
-):
-
-    data = api_json(
+    data = request_json(
         "https://api.binance.com/api/v3/klines",
         {
-            "symbol": symbol,
-            "interval": interval,
-            "limit": limit
+            "symbol": "SOLUSDT",
+            "interval": "1h",
+            "limit": 100
         }
     )
 
     if not data:
-
         return []
 
     return data
@@ -380,9 +359,7 @@ def get_candles(
 # TECHNICAL ANALYSIS
 # ============================================================
 
-def technical_analysis():
-
-    candles = get_candles()
+def calculate_technical(candles):
 
     if len(candles) < 50:
 
@@ -396,13 +373,13 @@ def technical_analysis():
         }
 
     closes = [
-        float(c[4])
-        for c in candles
+        float(x[4])
+        for x in candles
     ]
 
     volumes = [
-        float(c[5])
-        for c in candles
+        float(x[5])
+        for x in candles
     ]
 
     sma20 = (
@@ -414,8 +391,6 @@ def technical_analysis():
         sum(closes[-50:])
         / 50
     )
-
-    # RSI
 
     gains = []
     losses = []
@@ -463,10 +438,7 @@ def technical_analysis():
 
         rsi = (
             100
-            - (
-                100
-                / (1 + rs)
-            )
+            - 100 / (1 + rs)
         )
 
     avg_volume = (
@@ -483,8 +455,6 @@ def technical_analysis():
 
     score = 0
 
-    # Trend
-
     if closes[-1] > sma20:
         score += 10
     else:
@@ -495,21 +465,14 @@ def technical_analysis():
     else:
         score -= 12
 
-    # RSI
-
     if 50 <= rsi <= 68:
-
         score += 8
 
     elif rsi > 75:
-
         score -= 8
 
     elif rsi < 30:
-
         score += 6
-
-    # Volume
 
     if volume_ratio > 1.20:
 
@@ -534,7 +497,7 @@ def technical_analysis():
 
 def get_fear_greed():
 
-    data = api_json(
+    data = request_json(
         "https://api.alternative.me/fng/",
         {
             "limit": 1
@@ -545,26 +508,32 @@ def get_fear_greed():
 
         item = data["data"][0]
 
-        return (
-            int(item["value"]),
-            item["value_classification"]
-        )
+        return {
+            "value": int(
+                item["value"]
+            ),
+            "label": item[
+                "value_classification"
+            ],
+            "ok": True
+        }
 
     except Exception:
 
-        return (
-            None,
-            "N/D"
-        )
+        return {
+            "value": None,
+            "label": "N/D",
+            "ok": False
+        }
 
 
 # ============================================================
 # GLOBAL MARKET
 # ============================================================
 
-def get_global_market():
+def get_global():
 
-    data = api_json(
+    data = request_json(
         "https://api.coingecko.com/api/v3/global"
     )
 
@@ -572,28 +541,30 @@ def get_global_market():
 
         obj = data["data"]
 
-        dominance = float(
-            obj[
-                "market_cap_percentage"
-            ]["btc"]
-        )
-
-        change = float(
-            obj[
-                "market_cap_change_percentage_24h_usd"
-            ]
-        )
-
         return {
-            "btc_dominance": dominance,
-            "market_change": change
+            "btc_dominance":
+                float(
+                    obj[
+                        "market_cap_percentage"
+                    ]["btc"]
+                ),
+
+            "change":
+                float(
+                    obj[
+                        "market_cap_change_percentage_24h_usd"
+                    ]
+                ),
+
+            "ok": True
         }
 
     except Exception:
 
         return {
             "btc_dominance": None,
-            "market_change": None
+            "change": None,
+            "ok": False
         }
 
 
@@ -601,7 +572,7 @@ def get_global_market():
 # NEWS
 # ============================================================
 
-NEWS_SEARCHES = [
+NEWS_QUERIES = [
 
     "Solana SOL crypto",
 
@@ -609,25 +580,14 @@ NEWS_SEARCHES = [
 
     "SEC crypto regulation",
 
-    "Federal Reserve crypto interest rates",
+    "Federal Reserve crypto Bitcoin",
 
-    "US inflation crypto markets",
-
-    "Bitcoin ETF crypto market",
-
-    "crypto liquidation market",
-
-    "crypto hack exploit",
-
-    "Trump tariffs financial markets",
-
-    "global markets cryptocurrency"
+    "crypto market liquidation hack"
 
 ]
 
 
-POSITIVE_TERMS = [
-
+POSITIVE = [
     "approval",
     "approved",
     "etf",
@@ -638,24 +598,19 @@ POSITIVE_TERMS = [
     "rally",
     "growth",
     "rate cut",
-    "cuts",
     "institutional",
     "investment",
     "partnership",
     "integration",
     "record"
-
 ]
 
 
-NEGATIVE_TERMS = [
-
+NEGATIVE = [
     "hack",
     "exploit",
-    "outage",
     "ban",
     "lawsuit",
-    "sell",
     "dump",
     "crash",
     "collapse",
@@ -671,10 +626,7 @@ NEGATIVE_TERMS = [
 ]
 
 
-def get_news(
-    query,
-    limit=5
-):
+def fetch_news(query):
 
     url = (
         "https://news.google.com/rss/search?"
@@ -685,22 +637,24 @@ def get_news(
 
     try:
 
-        response = session.get(
+        r = requests.get(
             url,
-            timeout=REQUEST_TIMEOUT
+            headers=HEADERS,
+            timeout=TIMEOUT
         )
 
-        response.raise_for_status()
+        if r.status_code != 200:
+            return []
 
         root = ET.fromstring(
-            response.content
+            r.content
         )
 
-        results = []
+        result = []
 
         for item in root.findall(
             "./channel/item"
-        )[:limit]:
+        )[:4]:
 
             title = clean_text(
                 item.findtext(
@@ -719,89 +673,109 @@ def get_news(
                 ""
             )
 
-            if title:
+            if not title:
+                continue
 
-                results.append({
-                    "title": title,
-                    "link": link,
-                    "date": pub_date
-                })
+            low = title.lower()
 
-        return results
+            pos = sum(
+                word in low
+                for word in POSITIVE
+            )
+
+            neg = sum(
+                word in low
+                for word in NEGATIVE
+            )
+
+            if pos > neg:
+                sentiment = "POSITIVE"
+
+            elif neg > pos:
+                sentiment = "NEGATIVE"
+
+            else:
+                sentiment = "NEUTRAL"
+
+            result.append({
+                "title": title,
+                "link": link,
+                "date": pub_date,
+                "sentiment": sentiment
+            })
+
+        return result
 
     except Exception:
 
         return []
 
 
-def collect_news():
+def get_all_news():
 
-    results = []
+    all_news = []
 
-    seen = set()
+    # IMPORTANT:
+    # All searches run simultaneously.
 
-    # Only 5 searches to keep app fast
+    with ThreadPoolExecutor(
+        max_workers=5
+    ) as executor:
 
-    for query in NEWS_SEARCHES[:5]:
-
-        items = get_news(
-            query,
-            5
-        )
-
-        for item in items:
-
-            key = item["title"].lower()
-
-            if key in seen:
-                continue
-
-            seen.add(key)
-
-            title_lower = key
-
-            positive = sum(
-                1
-                for word in POSITIVE_TERMS
-                if word in title_lower
+        futures = [
+            executor.submit(
+                fetch_news,
+                q
             )
+            for q in NEWS_QUERIES
+        ]
 
-            negative = sum(
-                1
-                for word in NEGATIVE_TERMS
-                if word in title_lower
-            )
+        for future in as_completed(
+            futures
+        ):
 
-            if positive > negative:
+            try:
 
-                sentiment = "POSITIVE"
+                all_news.extend(
+                    future.result()
+                )
 
-            elif negative > positive:
+            except Exception:
 
-                sentiment = "NEGATIVE"
+                pass
 
-            else:
+    unique = {}
 
-                sentiment = "NEUTRAL"
+    for item in all_news:
 
-            item["sentiment"] = sentiment
+        key = item[
+            "title"
+        ].lower()
 
-            results.append(item)
+        if key not in unique:
 
-    return results[:25]
+            unique[key] = item
+
+    return list(
+        unique.values()
+    )[:20]
 
 
-def news_score(news):
+def calculate_news_score(news):
 
     score = 0
 
     for item in news:
 
-        if item["sentiment"] == "POSITIVE":
+        if item[
+            "sentiment"
+        ] == "POSITIVE":
 
             score += 2
 
-        elif item["sentiment"] == "NEGATIVE":
+        elif item[
+            "sentiment"
+        ] == "NEGATIVE":
 
             score -= 2
 
@@ -815,77 +789,172 @@ def news_score(news):
 
 
 # ============================================================
-# COMPLETE SCAN
+# PARALLEL DATA COLLECTION
 # ============================================================
 
-def run_scan():
+def perform_scan():
 
-    sol = get_market(
-        "SOLUSDT"
+    results = {}
+
+    # --------------------------------------------------------
+    # FIRST GROUP
+    # --------------------------------------------------------
+
+    tasks = {
+
+        "sol":
+            ("binance",
+             "SOLUSDT"),
+
+        "btc":
+            ("binance",
+             "BTCUSDT"),
+
+        "eth":
+            ("binance",
+             "ETHUSDT"),
+
+        "candles":
+            ("candles",
+             None),
+
+        "fear":
+            ("fear",
+             None),
+
+        "global":
+            ("global",
+             None),
+
+        "news":
+            ("news",
+             None)
+
+    }
+
+    def worker(name, kind, argument):
+
+        if kind == "binance":
+
+            return name, get_binance(
+                argument
+            )
+
+        if kind == "candles":
+
+            return name, get_candles()
+
+        if kind == "fear":
+
+            return name, get_fear_greed()
+
+        if kind == "global":
+
+            return name, get_global()
+
+        if kind == "news":
+
+            return name, get_all_news()
+
+        return name, None
+
+    start = datetime.now(
+        timezone.utc
     )
 
-    btc = get_market(
-        "BTCUSDT"
+    with ThreadPoolExecutor(
+        max_workers=7
+    ) as executor:
+
+        futures = []
+
+        for name, item in tasks.items():
+
+            futures.append(
+                executor.submit(
+                    worker,
+                    name,
+                    item[0],
+                    item[1]
+                )
+            )
+
+        for future in as_completed(
+            futures
+        ):
+
+            try:
+
+                name, value = (
+                    future.result()
+                )
+
+                results[name] = value
+
+            except Exception:
+
+                pass
+
+    # --------------------------------------------------------
+    # TECHNICAL
+    # --------------------------------------------------------
+
+    technical = calculate_technical(
+        results.get(
+            "candles",
+            []
+        )
     )
 
-    eth = get_market(
-        "ETHUSDT"
+    news = results.get(
+        "news",
+        []
     )
 
-    technical = (
-        technical_analysis()
-    )
-
-    fear_value, fear_label = (
-        get_fear_greed()
-    )
-
-    global_market = (
-        get_global_market()
-    )
-
-    news = collect_news()
-
-    nscore = news_score(
+    news_score = calculate_news_score(
         news
     )
 
     score = (
         technical["score"]
-        + nscore
+        + news_score
     )
 
-    # Fear / Greed adjustment
+    fear = results.get(
+        "fear",
+        {}
+    )
+
+    fear_value = fear.get(
+        "value"
+    )
 
     if fear_value is not None:
-
-        adjustment = (
-            fear_value - 50
-        ) / 7
 
         score += max(
             -7,
             min(
                 7,
-                adjustment
+                (fear_value - 50) / 7
             )
         )
 
-    # Global market adjustment
-
-    market_change = (
-        global_market[
-            "market_change"
-        ]
+    global_data = results.get(
+        "global",
+        {}
     )
 
-    if market_change is not None:
+    global_change = global_data.get(
+        "change"
+    )
+
+    if global_change is not None:
 
         score += max(
             -6,
             min(
                 6,
-                market_change * 1.5
+                global_change * 1.5
             )
         )
 
@@ -898,44 +967,71 @@ def run_scan():
     )
 
     confidence = clamp(
-        50 + abs(score) * 1.4,
+        50 + abs(score) * 1.5,
         50,
         92
     )
 
+    elapsed = (
+        datetime.now(
+            timezone.utc
+        )
+        - start
+    ).total_seconds()
+
     return {
 
-        "sol": sol,
+        "sol":
+            results.get(
+                "sol"
+            ),
 
-        "btc": btc,
+        "btc":
+            results.get(
+                "btc"
+            ),
 
-        "eth": eth,
+        "eth":
+            results.get(
+                "eth"
+            ),
 
-        "technical": technical,
+        "technical":
+            technical,
 
-        "fear": fear_value,
+        "fear":
+            fear,
 
-        "fear_label": fear_label,
+        "global":
+            global_data,
 
-        "global": global_market,
+        "news":
+            news,
 
-        "news": news,
+        "news_score":
+            news_score,
 
-        "news_score": nscore,
+        "score":
+            score,
 
-        "score": score,
+        "up":
+            up,
 
-        "up": up,
+        "down":
+            down,
 
-        "down": down,
+        "confidence":
+            confidence,
 
-        "confidence": confidence,
+        "elapsed":
+            elapsed,
 
-        "time": datetime.now(
-            timezone.utc
-        ).strftime(
-            "%H:%M:%S UTC"
-        )
+        "time":
+            datetime.now(
+                timezone.utc
+            ).strftime(
+                "%H:%M:%S UTC"
+            )
     }
 
 
@@ -950,135 +1046,43 @@ def send_telegram(
 
     if not TELEGRAM_TOKEN:
 
-        return (
-            False,
-            "Telegram token no configurado."
-        )
-
-    url = (
-        "https://api.telegram.org/bot"
-        + TELEGRAM_TOKEN
-        + "/sendMessage"
-    )
+        return False, "TOKEN NO CONFIGURADO"
 
     try:
 
-        response = session.post(
+        url = (
+            "https://api.telegram.org/bot"
+            + TELEGRAM_TOKEN
+            + "/sendMessage"
+        )
+
+        r = requests.post(
             url,
             data={
                 "chat_id": chat_id,
                 "text": message
             },
-            timeout=8
+            timeout=5
         )
 
-        data = response.json()
+        data = r.json()
 
         if data.get("ok"):
 
-            return (
-                True,
-                ""
-            )
+            return True, ""
 
-        return (
-            False,
-            data.get(
-                "description",
-                "Telegram error"
-            )
+        return False, data.get(
+            "description",
+            "Telegram error"
         )
 
-    except Exception as error:
+    except Exception as e:
 
-        return (
-            False,
-            str(error)
-        )
-
-
-def detect_telegram_chat():
-
-    if not TELEGRAM_TOKEN:
-
-        return (
-            None,
-            "Token Telegram no configurado."
-        )
-
-    url = (
-        "https://api.telegram.org/bot"
-        + TELEGRAM_TOKEN
-        + "/getUpdates"
-    )
-
-    try:
-
-        response = session.get(
-            url,
-            params={
-                "limit": 20
-            },
-            timeout=8
-        )
-
-        data = response.json()
-
-        if not data.get("ok"):
-
-            return (
-                None,
-                data.get(
-                    "description",
-                    "Telegram error"
-                )
-            )
-
-        results = data.get(
-            "result",
-            []
-        )
-
-        for update in reversed(
-            results
-        ):
-
-            message = (
-                update.get("message")
-                or update.get("edited_message")
-            )
-
-            if not message:
-                continue
-
-            chat = message.get(
-                "chat"
-            )
-
-            if chat:
-
-                return (
-                    str(
-                        chat.get("id")
-                    ),
-                    None
-                )
-
-        return (
-            None,
-            "No encontrado. Abre el bot y envía /start."
-        )
-
-    except Exception as error:
-
-        return (
-            None,
-            str(error)
-        )
+        return False, str(e)
 
 
 # ============================================================
-# HEADER - APPEARS IMMEDIATELY
+# HEADER
 # ============================================================
 
 st.markdown(
@@ -1087,7 +1091,7 @@ st.markdown(
 )
 
 st.markdown(
-    '<div class="subtitle">GLOBAL MULTI-VECTOR TRADING INTELLIGENCE // V3</div>',
+    '<div class="subtitle">MULTI-VECTOR SOLANA MARKET INTELLIGENCE // V4</div>',
     unsafe_allow_html=True
 )
 
@@ -1095,34 +1099,47 @@ st.write("")
 
 
 # ============================================================
-# TOP CONTROL
+# SCAN BUTTON
 # ============================================================
 
-left, middle, right = st.columns(
+col1, col2, col3 = st.columns(
     [2, 2, 1]
 )
 
-with left:
+with col1:
 
     scan = st.button(
         "⚡ SCAN SOL NOW",
-        use_container_width=True,
-        type="primary"
+        type="primary",
+        use_container_width=True
     )
 
-with middle:
+with col2:
 
-    st.info(
-        "El análisis comienza al pulsar SCAN."
+    st.markdown(
+        """
+        <div class="small">
+        ENGINE:
+        <span class="green">
+        PARALLEL MODE
+        </span>
+        <br>
+        APIs: Binance / CoinGecko /
+        Fear&Greed / Global News
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
-with right:
+with col3:
 
     st.markdown(
         """
         <div class="small">
         SYSTEM<br>
-        <span class="green">● ONLINE</span>
+        <span class="green">
+        ● READY
+        </span>
         </div>
         """,
         unsafe_allow_html=True
@@ -1130,36 +1147,35 @@ with right:
 
 
 # ============================================================
-# INITIAL SCREEN
+# INITIAL
 # ============================================================
 
-if "radar_data" not in st.session_state:
+if "radar" not in st.session_state:
 
     st.markdown(
         """
-        <div class="radar-card">
+        <div class="card">
 
         <h2>◉ SOL MARKET CONTROL</h2>
 
         <p class="small">
-        SYSTEM READY
+        QUANTUM ENGINE READY
         </p>
 
         <br>
 
         <div class="purple"
-        style="font-size:1.4rem">
+        style="font-size:1.5rem">
 
-        WAITING FOR MARKET SCAN...
+        WAITING FOR SCAN...
 
         </div>
 
         <br>
 
         <p>
-        El sistema analizará precio, tendencia,
-        volumen, RSI, Fear & Greed, mercado global
-        y noticias capaces de mover SOL.
+        Pulsa SCAN SOL NOW para analizar
+        el mercado.
         </p>
 
         </div>
@@ -1167,592 +1183,53 @@ if "radar_data" not in st.session_state:
         unsafe_allow_html=True
     )
 
-    st.stop()
-
-
-# ============================================================
-# RUN SCAN
-# ============================================================
-
-if scan:
-
-    with st.spinner(
-        "SCANNING GLOBAL MARKET..."
-    ):
-
-        st.session_state.radar_data = (
-            run_scan()
-        )
-
-
-data = st.session_state.radar_data
-
-
-# ============================================================
-# VERDICT
-# ============================================================
-
-up = data["up"]
-
-down = data["down"]
-
-if up >= 65:
-
-    verdict = "🟢 BULLISH BIAS"
-    color_class = "green"
-
-elif down >= 65:
-
-    verdict = "🔴 BEARISH BIAS"
-    color_class = "red"
-
 else:
 
-    verdict = "🟡 NEUTRAL / WAIT"
-    color_class = "yellow"
+    data = st.session_state.radar
 
+    # ========================================================
+    # VERDICT
+    # ========================================================
 
-st.markdown(
-    f"""
-    <div class="radar-card">
+    up = data["up"]
+    down = data["down"]
 
-    <div class="{color_class}"
-    style="font-size:1.5rem;font-weight:bold">
+    if up >= 65:
 
-    {verdict}
+        verdict = "🟢 BULLISH BIAS"
+        cls = "green"
 
-    </div>
+    elif down >= 65:
 
-    <br>
-
-    <div>
-    CHANCE OF UP
-    <b>{up}%</b>
-    </div>
-
-    <div class="progress-bg">
-    <div
-    class="progress-up"
-    style="width:{up}%">
-    </div>
-    </div>
-
-    <br>
-
-    <div>
-    CHANCE OF DOWN
-    <b>{down}%</b>
-    </div>
-
-    <div class="progress-bg">
-    <div
-    class="progress-down"
-    style="width:{down}%">
-    </div>
-    </div>
-
-    <br>
-
-    <div class="small">
-
-    MODEL CONFIDENCE:
-    {data["confidence"]:.0f}%
-
-    &nbsp; | &nbsp;
-
-    VECTOR SCORE:
-    {data["score"]:+.1f}
-
-    &nbsp; | &nbsp;
-
-    {data["time"]}
-
-    </div>
-
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-
-# ============================================================
-# MARKET METRICS
-# ============================================================
-
-st.markdown(
-    "### 📡 LIVE MARKET"
-)
-
-c1, c2, c3, c4 = st.columns(4)
-
-
-with c1:
-
-    sol = data["sol"]
-
-    if sol:
-
-        st.metric(
-            "SOL / USDT",
-            money(sol["price"]),
-            f'{sol["change"]:+.2f}%'
-        )
+        verdict = "🔴 BEARISH BIAS"
+        cls = "red"
 
     else:
 
-        st.metric(
-            "SOL / USDT",
-            "N/D"
-        )
+        verdict = "🟡 NEUTRAL / WAIT"
+        cls = "yellow"
 
+    st.markdown(
+        f"""
+        <div class="card">
 
-with c2:
+        <div class="{cls}"
+        style="font-size:1.6rem;font-weight:bold">
 
-    btc = data["btc"]
+        {verdict}
 
-    if btc:
+        </div>
 
-        st.metric(
-            "BTC",
-            money(btc["price"]),
-            f'{btc["change"]:+.2f}%'
-        )
+        <br>
 
-    else:
+        <div>
+        ⬆️ CHANCE UP:
+        <b>{up}%</b>
+        </div>
 
-        st.metric(
-            "BTC",
-            "N/D"
-        )
-
-
-with c3:
-
-    eth = data["eth"]
-
-    if eth:
-
-        st.metric(
-            "ETH",
-            money(eth["price"]),
-            f'{eth["change"]:+.2f}%'
-        )
-
-    else:
-
-        st.metric(
-            "ETH",
-            "N/D"
-        )
-
-
-with c4:
-
-    fear = data["fear"]
-
-    if fear is not None:
-
-        st.metric(
-            "FEAR / GREED",
-            fear,
-            data["fear_label"]
-        )
-
-    else:
-
-        st.metric(
-            "FEAR / GREED",
-            "N/D"
-        )
-
-
-# ============================================================
-# VECTOR ENGINE
-# ============================================================
-
-st.markdown(
-    "### 🧬 VECTOR ENGINE"
-)
-
-technical = data["technical"]
-
-v1, v2, v3, v4 = st.columns(4)
-
-
-with v1:
-
-    st.metric(
-        "TECHNICAL",
-        f'{technical["score"]:+.0f}'
-    )
-
-
-with v2:
-
-    if technical["rsi"] is not None:
-
-        st.metric(
-            "RSI 1H",
-            f'{technical["rsi"]:.1f}'
-        )
-
-    else:
-
-        st.metric(
-            "RSI 1H",
-            "N/D"
-        )
-
-
-with v3:
-
-    st.metric(
-        "NEWS VECTOR",
-        f'{data["news_score"]:+.0f}'
-    )
-
-
-with v4:
-
-    if technical["volume_ratio"]:
-
-        st.metric(
-            "VOLUME",
-            f'{technical["volume_ratio"]:.2f}x'
-        )
-
-    else:
-
-        st.metric(
-            "VOLUME",
-            "N/D"
-        )
-
-
-# ============================================================
-# TECHNICAL DETAILS
-# ============================================================
-
-with st.expander(
-    "📊 TECHNICAL MATRIX"
-):
-
-    t1, t2, t3, t4 = st.columns(4)
-
-    with t1:
-
-        st.write("SMA 20")
-
-        st.write(
-            money(
-                technical["sma20"]
-            )
-        )
-
-    with t2:
-
-        st.write("SMA 50")
-
-        st.write(
-            money(
-                technical["sma50"]
-            )
-        )
-
-    with t3:
-
-        st.write("RSI")
-
-        if technical["rsi"]:
-
-            st.write(
-                f'{technical["rsi"]:.2f}'
-            )
-
-    with t4:
-
-        st.write("Volume / Average")
-
-        if technical["volume_ratio"]:
-
-            st.write(
-                f'{technical["volume_ratio"]:.2f}x'
-            )
-
-    if technical["prices"]:
-
-        st.line_chart(
-            technical["prices"],
-            height=260
-        )
-
-
-# ============================================================
-# GLOBAL MARKET
-# ============================================================
-
-st.markdown(
-    "### 🌍 GLOBAL VECTOR"
-)
-
-g1, g2 = st.columns(2)
-
-with g1:
-
-    dominance = data[
-        "global"
-    ]["btc_dominance"]
-
-    if dominance is not None:
-
-        st.metric(
-            "BTC DOMINANCE",
-            f"{dominance:.2f}%"
-        )
-
-    else:
-
-        st.metric(
-            "BTC DOMINANCE",
-            "N/D"
-        )
-
-
-with g2:
-
-    change = data[
-        "global"
-    ]["market_change"]
-
-    if change is not None:
-
-        st.metric(
-            "TOTAL CRYPTO MARKET 24H",
-            f"{change:+.2f}%"
-        )
-
-    else:
-
-        st.metric(
-            "TOTAL CRYPTO MARKET 24H",
-            "N/D"
-        )
-
-
-# ============================================================
-# NEWS
-# ============================================================
-
-st.markdown(
-    "### 🌐 GLOBAL INTELLIGENCE STREAM"
-)
-
-news = data["news"]
-
-if not news:
-
-    st.warning(
-        "No se pudieron recuperar noticias en este momento."
-    )
-
-else:
-
-    for item in news:
-
-        sentiment = item[
-            "sentiment"
-        ]
-
-        if sentiment == "POSITIVE":
-
-            css = "news-positive"
-
-            icon = "🟢"
-
-        elif sentiment == "NEGATIVE":
-
-            css = "news-negative"
-
-            icon = "🔴"
-
-        else:
-
-            css = ""
-
-            icon = "⚪"
-
-        title = html.escape(
-            item["title"]
-        )
-
-        link = html.escape(
-            item["link"]
-        )
-
-        date = html.escape(
-            item["date"]
-        )
-
-        st.markdown(
-            f"""
-            <div class="news-card {css}">
-
-            {icon}
-            <b>{title}</b>
-
-            <div class="small">
-
-            {sentiment}
-            &nbsp; • &nbsp;
-            {date}
-
-            &nbsp; • &nbsp;
-
-            <a
-            href="{link}"
-            target="_blank">
-
-            SOURCE
-
-            </a>
-
-            </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-
-# ============================================================
-# TELEGRAM
-# ============================================================
-
-st.markdown(
-    "### 📲 TELEGRAM CONTROL"
-)
-
-if not TELEGRAM_TOKEN:
-
-    st.warning(
-        "Telegram no está configurado todavía. "
-        "Añade [telegram] en Streamlit Secrets."
-    )
-
-else:
-
-    tg1, tg2 = st.columns(2)
-
-    with tg1:
-
-        if st.button(
-            "🔎 DETECT CHAT ID",
-            use_container_width=True
-        ):
-
-            chat_id, error = (
-                detect_telegram_chat()
-            )
-
-            if chat_id:
-
-                st.success(
-                    "CHAT ID DETECTADO"
-                )
-
-                st.code(
-                    chat_id
-                )
-
-            else:
-
-                st.error(
-                    error
-                )
-
-    with tg2:
-
-        chat_id = (
-            TELEGRAM_CHAT_ID
-        )
-
-        if not chat_id:
-
-            chat_id = st.text_input(
-                "Telegram Chat ID"
-            )
-
-        if st.button(
-            "🚨 SEND SOL ALERT",
-            use_container_width=True
-        ):
-
-            if not chat_id:
-
-                st.error(
-                    "Introduce primero el Chat ID."
-                )
-
-            else:
-
-                message = (
-
-                    "🟣 SOL RADAR V3\n\n"
-
-                    f"{verdict}\n\n"
-
-                    f"⬆️ SUBIDA: {up}%\n"
-
-                    f"⬇️ BAJADA: {down}%\n\n"
-
-                    f"🎯 CONFIANZA: "
-                    f"{data['confidence']:.0f}%\n\n"
-
-                    f"🧬 TECHNICAL: "
-                    f"{data['technical']['score']:+.0f}\n"
-
-                    f"🌐 NEWS: "
-                    f"{data['news_score']:+.0f}\n\n"
-
-                    "⚠️ Probabilidad del modelo, "
-                    "no garantía de precio."
-                )
-
-                ok, error = send_telegram(
-                    chat_id,
-                    message
-                )
-
-                if ok:
-
-                    st.success(
-                        "Telegram enviado correctamente."
-                    )
-
-                else:
-
-                    st.error(
-                        f"Telegram: {error}"
-                    )
-
-
-# ============================================================
-# FOOTER
-# ============================================================
-
-st.markdown(
-    """
-    <br><br>
-
-    <div class="footer">
-
-    SOL RADAR V3
-    //
-    MULTI-VECTOR MARKET INTELLIGENCE
-    //
-    NOT FINANCIAL ADVICE
-
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+        <div class="bar-bg">
+        <div
+        class="bar-up"
+        style="width:{up}%">
+        </div>
+       
