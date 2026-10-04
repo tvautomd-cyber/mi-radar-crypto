@@ -1,51 +1,78 @@
 import streamlit as st
 import requests
-import pandas as pd
-import numpy as np
+import time
+import html
+import re
 import xml.etree.ElementTree as ET
-from urllib.parse import quote
 from datetime import datetime, timezone
-
+from urllib.parse import quote_plus
 
 # ============================================================
-# QUANTUM // SOLANA RADAR
-# Stable Streamlit Edition
+# SOL RADAR // GLOBAL MULTI-VECTOR
+# No Plotly - solo Streamlit + Requests + librería estándar
 # ============================================================
 
 st.set_page_config(
-    page_title="QUANTUM // SOL RADAR",
+    page_title="SOL RADAR // QUANTUM",
     page_icon="🟣",
-    layout="wide",
-    initial_sidebar_state="expanded",
+    layout="wide"
 )
-
 
 # ============================================================
-# CONFIGURATION
+# TELEGRAM
+# ============================================================
+# NO pongas el token directamente aquí.
+#
+# En Streamlit Cloud:
+#
+# Settings -> Secrets
+#
+# [telegram]
+# token = "TU_NUEVO_TOKEN"
+# chat_id = "TU_CHAT_ID"
+#
 # ============================================================
 
-BINANCE_API = "https://api.binance.com/api/v3"
-COINGECKO_API = "https://api.coingecko.com/api/v3"
-FEAR_GREED_API = "https://api.alternative.me/fng/"
+def get_secret(section, key, env_key=""):
+    try:
+        value = st.secrets[section][key]
+        if value:
+            return str(value).strip()
+    except Exception:
+        pass
 
-TELEGRAM_TOKEN = st.secrets.get(
-    "TELEGRAM_BOT_TOKEN",
-    ""
+    import os
+
+    if env_key:
+        return os.getenv(env_key, "").strip()
+
+    return ""
+
+
+TELEGRAM_TOKEN = get_secret(
+    "telegram",
+    "token",
+    "TELEGRAM_TOKEN"
 )
 
-TELEGRAM_CHAT_ID = st.secrets.get(
-    "TELEGRAM_CHAT_ID",
-    ""
+TELEGRAM_CHAT_ID = get_secret(
+    "telegram",
+    "chat_id",
+    "TELEGRAM_CHAT_ID"
 )
-
-TELEGRAM_USERNAME = st.secrets.get(
-    "TELEGRAM_BOT_USERNAME",
-    "Mycrypto_best_bot"
-)
-
 
 # ============================================================
-# CSS
+# HTTP SESSION
+# ============================================================
+
+SESSION = requests.Session()
+
+SESSION.headers.update({
+    "User-Agent": "SOL-RADAR/2.0"
+})
+
+# ============================================================
+# ESTILO HACKER / TRADER
 # ============================================================
 
 st.markdown(
@@ -54,167 +81,115 @@ st.markdown(
 
 .stApp {
     background:
-        radial-gradient(
-            circle at 85% 5%,
-            rgba(120,40,255,0.14),
-            transparent 30%
-        ),
-        radial-gradient(
-            circle at 10% 90%,
-            rgba(0,255,150,0.05),
-            transparent 30%
-        ),
-        #050607;
-
-    color: #d8d8d8;
-    font-family:
-        Consolas,
-        "Courier New",
-        monospace;
+        radial-gradient(circle at top right, #160b2b 0%, #050609 35%),
+        #050609;
+    color: #d7d7dc;
+    font-family: Consolas, "Courier New", monospace;
 }
 
 .block-container {
-    max-width: 1550px;
     padding-top: 1.2rem;
+    max-width: 1450px;
 }
 
-h1, h2, h3, p, div, span {
-    font-family:
-        Consolas,
-        "Courier New",
-        monospace;
+h1, h2, h3 {
+    font-family: Consolas, "Courier New", monospace !important;
 }
 
-.q-title {
-    font-size: 2.2rem;
-    font-weight: 900;
-    letter-spacing: 4px;
-    color: white;
+[data-testid="stMetric"] {
+    background: #090c13;
+    border: 1px solid #252b3a;
+    padding: 12px;
+    border-radius: 10px;
 }
 
-.q-subtitle {
-    color: #666b72;
-    letter-spacing: 2px;
-    font-size: .7rem;
+[data-testid="stMetricValue"] {
+    font-family: Consolas, "Courier New", monospace;
+}
+
+.radar {
+    background:
+        linear-gradient(
+            135deg,
+            rgba(10,10,20,0.98),
+            rgba(22,5,38,0.98)
+        );
+
+    border: 1px solid #713cff;
+    border-radius: 14px;
+    padding: 24px;
+
+    box-shadow:
+        0 0 25px rgba(120,60,255,0.16),
+        inset 0 0 30px rgba(120,60,255,0.04);
 }
 
 .panel {
-    background:
-        linear-gradient(
-            145deg,
-            #0c0e11,
-            #070809
-        );
-
-    border: 1px solid #20242a;
-    border-radius: 8px;
+    background: #090c12;
+    border: 1px solid #202634;
+    border-radius: 10px;
     padding: 16px;
     margin-bottom: 14px;
 }
 
-.panel-purple {
-    border-color: #7138aa;
-    box-shadow:
-        0 0 25px rgba(140,60,255,.10);
+.news {
+    background: #080a0f;
+    border-left: 3px solid #8a4dff;
+    padding: 11px 14px;
+    margin: 7px 0;
+    border-radius: 4px;
 }
 
-.label {
-    color: #666b72;
-    font-size: .65rem;
-    letter-spacing: 1.5px;
-}
-
-.big {
-    color: white;
-    font-size: 2rem;
-    font-weight: 900;
-}
-
-.score {
-    font-size: 4rem;
-    font-weight: 900;
-    line-height: 1;
+.small {
+    color: #7f8798;
+    font-size: 0.78rem;
 }
 
 .green {
     color: #00ff88 !important;
+    font-weight: bold;
 }
 
 .red {
-    color: #ff405c !important;
+    color: #ff4965 !important;
+    font-weight: bold;
 }
 
 .yellow {
     color: #ffc857 !important;
+    font-weight: bold;
 }
 
 .purple {
-    color: #a96cff !important;
+    color: #b875ff !important;
+    font-weight: bold;
 }
 
-.cyan {
-    color: #00d9ff !important;
-}
-
-.muted {
-    color: #666b72 !important;
-}
-
-.progress {
-    width: 100%;
-    height: 10px;
-    background: #171a1f;
+.bar {
+    height: 13px;
+    background: #171b25;
     border-radius: 10px;
     overflow: hidden;
 }
 
-.progress-fill {
+.bar-green {
     height: 100%;
     background: #00ff88;
+    border-radius: 10px;
 }
 
-.factor {
-    border-bottom: 1px solid #1b1e23;
-    padding: 9px 0;
-    font-size: .78rem;
+.bar-red {
+    height: 100%;
+    background: #ff3150;
+    border-radius: 10px;
 }
 
-.factor:last-child {
-    border-bottom: 0;
-}
-
-.news {
-    background: #090b0e;
-    border-left: 3px solid #63339a;
-    padding: 10px;
-    margin-bottom: 8px;
-    border-radius: 3px;
-}
-
-.news-title {
-    color: #dddddd;
-    font-size: .78rem;
-    line-height: 1.4;
-}
-
-.news-meta {
-    color: #666b72;
-    font-size: .62rem;
-    margin-top: 5px;
-}
-
-.alertbox {
-    background: #0d0a13;
-    border-left: 3px solid #a96cff;
-    padding: 12px;
-    border-radius: 4px;
-}
-
-.metric-box {
-    background: #090b0e;
-    border: 1px solid #1d2025;
+.signal-box {
+    background: #070910;
+    border: 1px solid #242a38;
+    border-radius: 9px;
     padding: 14px;
-    border-radius: 7px;
+    margin-bottom: 10px;
 }
 
 </style>
@@ -222,23 +197,16 @@ h1, h2, h3, p, div, span {
     unsafe_allow_html=True
 )
 
-
 # ============================================================
-# HTTP HELPER
+# FUNCIONES GENERALES
 # ============================================================
 
-def get_json(url, params=None, timeout=12):
-
+def get_json(url, params=None, timeout=8):
     try:
-
-        response = requests.get(
+        response = SESSION.get(
             url,
             params=params,
-            timeout=timeout,
-            headers={
-                "User-Agent":
-                    "Quantum-Solana-Radar/1.0"
-            }
+            timeout=timeout
         )
 
         response.raise_for_status()
@@ -246,968 +214,945 @@ def get_json(url, params=None, timeout=12):
         return response.json()
 
     except Exception:
+        return None
+
+
+def clamp(value, minimum=5, maximum=95):
+    return max(
+        minimum,
+        min(
+            maximum,
+            int(round(value))
+        )
+    )
+
+
+def format_money(value):
+
+    if value is None:
+        return "—"
+
+    if abs(value) >= 1000:
+        return f"${value:,.0f}"
+
+    return f"${value:,.4f}"
+
+
+def clean_text(value):
+
+    value = value or ""
+
+    value = re.sub(
+        r"<[^>]+>",
+        " ",
+        value
+    )
+
+    value = html.unescape(value)
+
+    value = re.sub(
+        r"\s+",
+        " ",
+        value
+    )
+
+    return value.strip()
+
+
+# ============================================================
+# BINANCE - PRECIO
+# ============================================================
+
+def binance_24h(symbol):
+
+    data = get_json(
+        "https://api.binance.com/api/v3/ticker/24hr",
+        {
+            "symbol": symbol
+        },
+        timeout=7
+    )
+
+    if not data:
+        return None
+
+    try:
+
+        return {
+            "price": float(
+                data.get(
+                    "lastPrice",
+                    0
+                )
+            ),
+
+            "change": float(
+                data.get(
+                    "priceChangePercent",
+                    0
+                )
+            ),
+
+            "volume": float(
+                data.get(
+                    "quoteVolume",
+                    0
+                )
+            )
+        }
+
+    except Exception:
 
         return None
 
 
 # ============================================================
-# MARKET DATA
+# BINANCE - VELAS
 # ============================================================
 
-@st.cache_data(ttl=30)
-def get_market():
+def binance_klines(
+    symbol,
+    interval="1h",
+    limit=100
+):
 
     data = get_json(
-        f"{COINGECKO_API}/simple/price",
+        "https://api.binance.com/api/v3/klines",
         {
-            "ids":
-                "solana,bitcoin,ethereum",
-            "vs_currencies":
-                "usd",
-            "include_24hr_change":
-                "true",
-            "include_24hr_vol":
-                "true"
-        }
+            "symbol": symbol,
+            "interval": interval,
+            "limit": limit
+        },
+        timeout=8
     )
 
-    return data or {}
+    if not data:
+        return []
+
+    return data
 
 
-@st.cache_data(ttl=60)
-def get_candles():
+# ============================================================
+# ANALISIS TECNICO SOL
+# ============================================================
 
-    data = get_json(
-        f"{BINANCE_API}/klines",
-        {
-            "symbol":
-                "SOLUSDT",
+def technical_analysis():
 
-            "interval":
-                "1h",
-
-            "limit":
-                250
-        }
+    candles = binance_klines(
+        "SOLUSDT",
+        "1h",
+        100
     )
 
-    if not isinstance(data, list):
-        return pd.DataFrame()
+    if len(candles) < 50:
 
-    columns = [
-        "time",
-        "open",
-        "high",
-        "low",
-        "close",
-        "volume",
-        "close_time",
-        "quote_volume",
-        "trades",
-        "buy_base",
-        "buy_quote",
-        "ignore"
+        return 0, {}
+
+    closes = [
+        float(candle[4])
+        for candle in candles
     ]
 
-    try:
+    volumes = [
+        float(candle[5])
+        for candle in candles
+    ]
 
-        df = pd.DataFrame(
-            data,
-            columns=columns
+    def sma(period):
+
+        return (
+            sum(closes[-period:])
+            / period
         )
 
-        for column in [
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume"
-        ]:
+    sma20 = sma(20)
 
-            df[column] = pd.to_numeric(
-                df[column],
-                errors="coerce"
+    sma50 = sma(50)
+
+    last_price = closes[-1]
+
+    # --------------------------------------------------------
+    # RSI
+    # --------------------------------------------------------
+
+    gains = []
+    losses = []
+
+    for i in range(
+        1,
+        len(closes)
+    ):
+
+        difference = (
+            closes[i]
+            - closes[i - 1]
+        )
+
+        gains.append(
+            max(
+                difference,
+                0
             )
-
-        df["time"] = pd.to_datetime(
-            df["time"],
-            unit="ms"
         )
 
-        return df
+        losses.append(
+            max(
+                -difference,
+                0
+            )
+        )
 
-    except Exception:
+    average_gain = (
+        sum(gains[-14:])
+        / 14
+    )
 
-        return pd.DataFrame()
+    average_loss = (
+        sum(losses[-14:])
+        / 14
+    )
+
+    if average_loss == 0:
+
+        rsi = 100
+
+    else:
+
+        relative_strength = (
+            average_gain
+            / average_loss
+        )
+
+        rsi = (
+            100
+            - (
+                100
+                / (
+                    1
+                    + relative_strength
+                )
+            )
+        )
+
+    # --------------------------------------------------------
+    # VOLUMEN
+    # --------------------------------------------------------
+
+    average_volume = (
+        sum(volumes[-20:])
+        / 20
+    )
+
+    if average_volume:
+
+        volume_ratio = (
+            volumes[-1]
+            / average_volume
+        )
+
+    else:
+
+        volume_ratio = 1
+
+    # --------------------------------------------------------
+    # SCORE
+    # --------------------------------------------------------
+
+    score = 0
+
+    if last_price > sma20:
+        score += 10
+    else:
+        score -= 10
+
+    if sma20 > sma50:
+        score += 10
+    else:
+        score -= 10
+
+    if 50 <= rsi <= 68:
+
+        score += 10
+
+    elif rsi > 75:
+
+        score -= 8
+
+    elif rsi < 30:
+
+        score += 5
+
+    if (
+        volume_ratio > 1.20
+        and last_price > sma20
+    ):
+
+        score += 7
+
+    return score, {
+        "rsi": rsi,
+        "sma20": sma20,
+        "sma50": sma50,
+        "volume_ratio": volume_ratio,
+        "last": last_price
+    }
 
 
 # ============================================================
 # FEAR & GREED
 # ============================================================
 
-@st.cache_data(ttl=300)
-def get_fear_greed():
+def fear_greed():
 
     data = get_json(
-        FEAR_GREED_API,
+        "https://api.alternative.me/fng/",
         {
             "limit": 1
-        }
+        },
+        timeout=7
     )
 
     try:
 
         item = data["data"][0]
 
-        return {
-            "value":
-                int(item["value"]),
+        return (
+            int(item["value"]),
+            item["value_classification"]
+        )
 
-            "classification":
-                item[
-                    "value_classification"
-                ]
+    except Exception:
+
+        return (
+            None,
+            "N/D"
+        )
+
+
+# ============================================================
+# MERCADO GLOBAL
+# ============================================================
+
+def global_market():
+
+    data = get_json(
+        "https://api.coingecko.com/api/v3/global",
+        timeout=8
+    )
+
+    try:
+
+        global_data = data["data"]
+
+        return {
+
+            "btc_dominance":
+                float(
+                    global_data[
+                        "market_cap_percentage"
+                    ]["btc"]
+                ),
+
+            "market_change":
+                float(
+                    global_data[
+                        "market_cap_change_percentage_24h_usd"
+                    ]
+                )
         }
 
     except Exception:
 
         return {
-            "value": None,
-            "classification": "N/A"
+
+            "btc_dominance": None,
+
+            "market_change": None
         }
 
 
 # ============================================================
-# NEWS
+# GOOGLE NEWS RSS
 # ============================================================
 
-@st.cache_data(ttl=300)
-def get_news():
-
-    query = (
-        "Solana OR SOL crypto OR Bitcoin "
-        "OR crypto ETF OR SEC crypto OR "
-        "Federal Reserve OR Fed OR inflation "
-        "OR tariffs OR Trump crypto OR "
-        "crypto regulation"
-    )
+def google_news(
+    query,
+    limit=8
+):
 
     url = (
-        "https://news.google.com/rss/search?"
-        "q="
-        + quote(query)
+        "https://news.google.com/rss/search?q="
+        + quote_plus(query)
         + "&hl=en-US&gl=US&ceid=US:en"
     )
 
     try:
 
-        response = requests.get(
+        response = SESSION.get(
             url,
-            timeout=12,
-            headers={
-                "User-Agent":
-                    "Quantum-Solana-Radar/1.0"
-            }
+            timeout=10
         )
 
         response.raise_for_status()
 
         root = ET.fromstring(
-            response.text
+            response.content
         )
+
+        results = []
+
+        for item in root.findall(
+            "./channel/item"
+        )[:limit]:
+
+            title = clean_text(
+                item.findtext(
+                    "title",
+                    ""
+                )
+            )
+
+            date = item.findtext(
+                "pubDate",
+                ""
+            )
+
+            link = item.findtext(
+                "link",
+                ""
+            )
+
+            if title:
+
+                results.append(
+                    {
+                        "title": title,
+                        "date": date,
+                        "link": link
+                    }
+                )
+
+        return results
 
     except Exception:
 
         return []
 
-    articles = []
 
-    for item in root.findall(
-        ".//item"
-    )[:25]:
+# ============================================================
+# NOTICIAS QUE PUEDEN AFECTAR SOL
+# ============================================================
 
-        title_node = item.find(
-            "title"
-        )
+NEWS_QUERIES = [
 
-        source_node = item.find(
-            "source"
-        )
+    "Solana SOL cryptocurrency",
 
-        date_node = item.find(
-            "pubDate"
-        )
+    "Solana ETF institutional",
 
-        title = (
-            title_node.text
-            if title_node is not None
-            else "Unknown"
-        )
+    "Solana network hack exploit outage",
 
-        source = (
-            source_node.text
-            if source_node is not None
-            else "News"
-        )
+    "Bitcoin ETF cryptocurrency",
 
-        date = (
-            date_node.text
-            if date_node is not None
-            else ""
-        )
+    "SEC cryptocurrency regulation",
 
-        articles.append(
-            {
-                "title":
-                    title or "Unknown",
+    "Federal Reserve interest rates crypto",
 
-                "source":
-                    source or "News",
+    "US inflation CPI PCE crypto",
 
-                "date":
-                    date or ""
-            }
-        )
+    "US jobs unemployment payrolls crypto",
 
-    return articles
+    "Trump tariffs markets cryptocurrency",
+
+    "geopolitics oil markets cryptocurrency",
+
+    "crypto market liquidation",
+
+    "crypto institutional inflows",
+
+    "stablecoin regulation",
+
+    "US dollar DXY cryptocurrency",
+
+    "global financial markets crypto"
+
+]
 
 
 # ============================================================
-# NEWS SENTIMENT
+# SENTIMIENTO SIMPLE DE NOTICIAS
 # ============================================================
 
-def calculate_news_score(
-    articles
-):
+POSITIVE_WORDS = [
 
-    bullish_words = [
-        "etf",
-        "approval",
-        "approved",
-        "adoption",
-        "inflow",
-        "bullish",
-        "buy",
-        "partnership",
-        "integration",
-        "launch",
-        "institutional",
-        "growth",
-        "record",
-        "upgrade",
-        "positive",
-        "staking",
-        "investment"
-    ]
+    "approval",
+    "approved",
+    "etf",
+    "inflow",
+    "bullish",
+    "adoption",
+    "record",
+    "surge",
+    "rally",
+    "buy",
+    "growth",
+    "positive",
+    "rate cut",
+    "cuts",
+    "integration",
+    "partnership",
+    "institutional",
+    "investment"
 
-    bearish_words = [
-        "hack",
-        "exploit",
-        "attack",
-        "outflow",
-        "bearish",
-        "sell",
-        "lawsuit",
-        "ban",
-        "fraud",
-        "collapse",
-        "liquidation",
-        "shutdown",
-        "halt",
-        "negative",
-        "crash",
-        "sanction",
-        "tariff",
-        "inflation"
-    ]
+]
 
-    total = 0
+NEGATIVE_WORDS = [
 
-    results = []
+    "hack",
+    "exploit",
+    "outage",
+    "lawsuit",
+    "ban",
+    "sell",
+    "dump",
+    "crash",
+    "collapse",
+    "war",
+    "tariff",
+    "inflation",
+    "hawkish",
+    "liquidation",
+    "fraud",
+    "attack",
+    "drain",
+    "negative",
+    "recession"
 
-    for article in articles:
+]
 
-        title = article[
+
+def calculate_news_score(news):
+
+    score = 0
+
+    for item in news:
+
+        title = item[
             "title"
         ].lower()
 
-        bullish = sum(
-            word in title
-            for word in bullish_words
+        for word in POSITIVE_WORDS:
+
+            if word in title:
+                score += 2
+
+        for word in NEGATIVE_WORDS:
+
+            if word in title:
+                score -= 2
+
+    return max(
+        -20,
+        min(
+            20,
+            score
         )
-
-        bearish = sum(
-            word in title
-            for word in bearish_words
-        )
-
-        score = max(
-            -5,
-            min(
-                5,
-                bullish - bearish
-            )
-        )
-
-        total += score
-
-        copy = article.copy()
-
-        copy["score"] = score
-
-        results.append(copy)
-
-    if not results:
-
-        return 0.0, []
-
-    average = (
-        total / len(results)
-    )
-
-    return (
-        max(
-            -10,
-            min(
-                10,
-                average * 3
-            )
-        ),
-        results
     )
 
 
 # ============================================================
-# TECHNICAL INDICATORS
+# TELEGRAM API
 # ============================================================
 
-def calculate_rsi(
-    series,
-    period=14
+def telegram_request(
+    method,
+    params=None
 ):
-
-    delta = series.diff()
-
-    gain = delta.clip(
-        lower=0
-    )
-
-    loss = -delta.clip(
-        upper=0
-    )
-
-    average_gain = (
-        gain.rolling(period)
-        .mean()
-    )
-
-    average_loss = (
-        loss.rolling(period)
-        .mean()
-    )
-
-    rs = (
-        average_gain /
-        average_loss.replace(
-            0,
-            np.nan
-        )
-    )
-
-    return 100 - (
-        100 / (1 + rs)
-    )
-
-
-def calculate_indicators(
-    df
-):
-
-    if df.empty:
-
-        return df
-
-    result = df.copy()
-
-    result["EMA20"] = (
-        result["close"]
-        .ewm(
-            span=20,
-            adjust=False
-        )
-        .mean()
-    )
-
-    result["EMA50"] = (
-        result["close"]
-        .ewm(
-            span=50,
-            adjust=False
-        )
-        .mean()
-    )
-
-    result["EMA200"] = (
-        result["close"]
-        .ewm(
-            span=200,
-            adjust=False
-        )
-        .mean()
-    )
-
-    result["RSI"] = (
-        calculate_rsi(
-            result["close"]
-        )
-    )
-
-    result["VOLMA20"] = (
-        result["volume"]
-        .rolling(20)
-        .mean()
-    )
-
-    return result
-
-
-# ============================================================
-# TECHNICAL SCORE
-# ============================================================
-
-def technical_score(df):
-
-    if (
-        df.empty
-        or len(df) < 50
-    ):
-
-        return 0, []
-
-    row = df.iloc[-1]
-
-    score = 0
-
-    factors = []
-
-    close = float(
-        row["close"]
-    )
-
-    ema20 = float(
-        row["EMA20"]
-    )
-
-    ema50 = float(
-        row["EMA50"]
-    )
-
-    ema200 = float(
-        row["EMA200"]
-    )
-
-    current_rsi = (
-        float(row["RSI"])
-        if pd.notna(row["RSI"])
-        else 50
-    )
-
-    volume = float(
-        row["volume"]
-    )
-
-    volume_average = (
-        float(row["VOLMA20"])
-        if pd.notna(
-            row["VOLMA20"]
-        )
-        else volume
-    )
-
-    if close > ema20:
-
-        score += 10
-
-        factors.append(
-            (
-                "🟢",
-                "Precio sobre EMA20",
-                "+10"
-            )
-        )
-
-    else:
-
-        score -= 10
-
-        factors.append(
-            (
-                "🔴",
-                "Precio bajo EMA20",
-                "-10"
-            )
-        )
-
-    if ema20 > ema50:
-
-        score += 10
-
-        factors.append(
-            (
-                "🟢",
-                "EMA20 > EMA50",
-                "+10"
-            )
-        )
-
-    else:
-
-        score -= 10
-
-        factors.append(
-            (
-                "🔴",
-                "EMA20 < EMA50",
-                "-10"
-            )
-        )
-
-    if close > ema200:
-
-        score += 8
-
-        factors.append(
-            (
-                "🟢",
-                "Precio sobre EMA200",
-                "+8"
-            )
-        )
-
-    else:
-
-        score -= 8
-
-        factors.append(
-            (
-                "🔴",
-                "Precio bajo EMA200",
-                "-8"
-            )
-        )
-
-    if 50 <= current_rsi <= 68:
-
-        score += 8
-
-        factors.append(
-            (
-                "🟢",
-                f"RSI saludable {current_rsi:.1f}",
-                "+8"
-            )
-        )
-
-    elif current_rsi >= 75:
-
-        score -= 8
-
-        factors.append(
-            (
-                "🔴",
-                f"RSI sobrecomprado {current_rsi:.1f}",
-                "-8"
-            )
-        )
-
-    elif current_rsi <= 30:
-
-        score += 5
-
-        factors.append(
-            (
-                "🟡",
-                f"RSI sobrevendido {current_rsi:.1f}",
-                "+5"
-            )
-        )
-
-    else:
-
-        factors.append(
-            (
-                "⚪",
-                f"RSI neutral {current_rsi:.1f}",
-                "0"
-            )
-        )
-
-    if volume > volume_average:
-
-        score += 6
-
-        factors.append(
-            (
-                "🟢",
-                "Volumen > media 20",
-                "+6"
-            )
-        )
-
-    else:
-
-        score -= 3
-
-        factors.append(
-            (
-                "🔴",
-                "Volumen < media 20",
-                "-3"
-            )
-        )
-
-    return (
-        max(
-            -50,
-            min(
-                50,
-                score
-            )
-        ),
-        factors
-    )
-
-
-# ============================================================
-# MARKET SCORE
-# ============================================================
-
-def market_score(
-    market
-):
-
-    sol = market.get(
-        "solana",
-        {}
-    )
-
-    btc = market.get(
-        "bitcoin",
-        {}
-    )
-
-    sol_change = float(
-        sol.get(
-            "usd_24h_change"
-        ) or 0
-    )
-
-    btc_change = float(
-        btc.get(
-            "usd_24h_change"
-        ) or 0
-    )
-
-    score = 0
-
-    factors = []
-
-    if sol_change >= 3:
-
-        score += 12
-
-        factors.append(
-            (
-                "🟢",
-                f"SOL momentum {sol_change:+.2f}%",
-                "+12"
-            )
-        )
-
-    elif sol_change >= 1:
-
-        score += 6
-
-        factors.append(
-            (
-                "🟢",
-                f"SOL momentum {sol_change:+.2f}%",
-                "+6"
-            )
-        )
-
-    elif sol_change <= -3:
-
-        score -= 12
-
-        factors.append(
-            (
-                "🔴",
-                f"SOL momentum {sol_change:+.2f}%",
-                "-12"
-            )
-        )
-
-    elif sol_change <= -1:
-
-        score -= 6
-
-        factors.append(
-            (
-                "🔴",
-                f"SOL momentum {sol_change:+.2f}%",
-                "-6"
-            )
-        )
-
-    else:
-
-        factors.append(
-            (
-                "⚪",
-                f"SOL 24h {sol_change:+.2f}%",
-                "0"
-            )
-        )
-
-    if btc_change >= 2:
-
-        score += 10
-
-        factors.append(
-            (
-                "🟢",
-                f"BTC fuerte {btc_change:+.2f}%",
-                "+10"
-            )
-        )
-
-    elif btc_change >= .5:
-
-        score += 5
-
-        factors.append(
-            (
-                "🟢",
-                f"BTC positivo {btc_change:+.2f}%",
-                "+5"
-            )
-        )
-
-    elif btc_change <= -2:
-
-        score -= 10
-
-        factors.append(
-            (
-                "🔴",
-                f"BTC débil {btc_change:+.2f}%",
-                "-10"
-            )
-        )
-
-    elif btc_change <= -.5:
-
-        score -= 5
-
-        factors.append(
-            (
-                "🔴",
-                f"BTC negativo {btc_change:+.2f}%",
-                "-5"
-            )
-        )
-
-    return (
-        max(
-            -50,
-            min(
-                50,
-                score
-            )
-        ),
-        factors
-    )
-
-
-# ============================================================
-# SENTIMENT
-# ============================================================
-
-def sentiment_score(
-    fear_greed
-):
-
-    value = fear_greed.get(
-        "value"
-    )
-
-    if value is None:
-
-        return 0, [
-            (
-                "⚪",
-                "Fear & Greed no disponible",
-                "0"
-            )
-        ]
-
-    if value >= 75:
-
-        return 7, [
-            (
-                "🟢",
-                f"Fear & Greed {value}",
-                "+7"
-            )
-        ]
-
-    if value >= 55:
-
-        return 4, [
-            (
-                "🟢",
-                f"Fear & Greed {value}",
-                "+4"
-            )
-        ]
-
-    if value <= 25:
-
-        return -7, [
-            (
-                "🔴",
-                f"Fear & Greed {value}",
-                "-7"
-            )
-        ]
-
-    if value <= 45:
-
-        return -4, [
-            (
-                "🟡",
-                f"Fear & Greed {value}",
-                "-4"
-            )
-        ]
-
-    return 0, [
-        (
-            "⚪",
-            f"Fear & Greed {value}",
-            "0"
-        )
-    ]
-
-
-# ============================================================
-# TELEGRAM
-# ============================================================
-
-def telegram_send(
-    message
-):
-
-    if not TELEGRAM_TOKEN:
-
-        return (
-            False,
-            "Falta TELEGRAM_BOT_TOKEN"
-        )
-
-    if not TELEGRAM_CHAT_ID:
-
-        return (
-            False,
-            "Falta TELEGRAM_CHAT_ID"
-        )
-
-    url = (
-        "https://api.telegram.org/"
-        f"bot{TELEGRAM_TOKEN}"
-        "/sendMessage"
-    )
-
-    try:
-
-        response = requests.post(
-            url,
-            data={
-                "chat_id":
-                    TELEGRAM_CHAT_ID,
-
-                "text":
-                    message
-            },
-            timeout=12
-        )
-
-        if response.ok:
-
-            return (
-                True,
-                "Mensaje enviado"
-            )
-
-        return (
-            False,
-            response.text
-        )
-
-    except Exception as exc:
-
-        return (
-            False,
-            str(exc)
-        )
-
-
-def find_chat_id():
 
     if not TELEGRAM_TOKEN:
 
         return (
             None,
-            "Token no configurado"
+            "Telegram token no configurado."
         )
 
     url = (
-        "https://api.telegram.org/"
-        f"bot{TELEGRAM_TOKEN}"
-        "/getUpdates"
+        "https://api.telegram.org/bot"
+        + TELEGRAM_TOKEN
+        + "/"
+        + method
     )
 
     try:
 
-        response = requests.get(
+        response = SESSION.get(
             url,
-            timeout=12
+            params=params or {},
+            timeout=10
         )
 
         data = response.json()
 
-        updates = data.get(
-            "result",
-            []
-        )
-
-        if not updates:
+        if not data.get("ok"):
 
             return (
                 None,
-                "Escribe /start al bot primero."
+                data.get(
+                    "description",
+                    "Error Telegram"
+                )
             )
 
-        for update in reversed(
-            updates
-        ):
+        return (
+            data,
+            None
+        )
 
-            message = update.get(
-                "message"
+    except Exception as error:
+
+        return (
+            None,
+            str(error)
+        )
+
+
+# ============================================================
+# ENVIAR TELEGRAM
+# ============================================================
+
+def send_telegram(
+    chat_id,
+    message
+):
+
+    data, error = telegram_request(
+        "sendMessage",
+        {
+            "chat_id": chat_id,
+            "text": message,
+            "disable_web_page_preview": True
+        }
+    )
+
+    if error:
+
+        return (
+            False,
+            error
+        )
+
+    return (
+        True,
+        None
+    )
+
+
+# ============================================================
+# DETECTAR CHAT ID
+# ============================================================
+
+def detect_chat_id():
+
+    data, error = telegram_request(
+        "getUpdates",
+        {
+            "limit": 20,
+            "timeout": 1
+        }
+    )
+
+    if error:
+
+        return (
+            None,
+            error
+        )
+
+    if not data:
+
+        return (
+            None,
+            "No se recibió respuesta."
+        )
+
+    chats = []
+
+    for update in data.get(
+        "result",
+        []
+    ):
+
+        message = (
+            update.get("message")
+            or update.get("edited_message")
+        )
+
+        if not message:
+            continue
+
+        chat = message.get(
+            "chat"
+        )
+
+        if not chat:
+            continue
+
+        chats.append(
+            {
+                "id": str(
+                    chat.get("id")
+                ),
+                "username":
+                    chat.get(
+                        "username",
+                        ""
+                    ),
+                "name":
+                    chat.get(
+                        "first_name",
+                        ""
+                    )
+            }
+        )
+
+    if not chats:
+
+        return (
+            None,
+            "No hay mensajes. Abre tu bot en Telegram y envía /start."
+        )
+
+    return (
+        chats[-1]["id"],
+        None
+    )
+
+
+# ============================================================
+# CONSTRUIR RADAR
+# ============================================================
+
+@st.cache_data(ttl=60)
+def build_radar():
+
+    sol = binance_24h(
+        "SOLUSDT"
+    )
+
+    btc = binance_24h(
+        "BTCUSDT"
+    )
+
+    eth = binance_24h(
+        "ETHUSDT"
+    )
+
+    technical_score_value, technical_data = (
+        technical_analysis()
+    )
+
+    fear_value, fear_label = (
+        fear_greed()
+    )
+
+    global_data = (
+        global_market()
+    )
+
+    all_news = []
+
+    seen_titles = set()
+
+    for query in NEWS_QUERIES:
+
+        news = google_news(
+            query,
+            8
+        )
+
+        for item in news:
+
+            key = item[
+                "title"
+            ].lower()
+
+            if key not in seen_titles:
+
+                seen_titles.add(
+                    key
+                )
+
+                all_news.append(
+                    item
+                )
+
+    news_score = (
+        calculate_news_score(
+            all_news
+        )
+    )
+
+    # --------------------------------------------------------
+    # SCORE FINAL
+    # --------------------------------------------------------
+
+    score = (
+        technical_score_value
+        + news_score
+    )
+
+    # Fear & Greed
+    if fear_value is not None:
+
+        fear_adjustment = (
+            (fear_value - 50)
+            / 6
+        )
+
+        fear_adjustment = max(
+            -8,
+            min(
+                8,
+                fear_adjustment
             )
+        )
 
-            if message:
+        score += fear_adjustment
 
-                chat = message.get(
-         
+    # Mercado global
+    if (
+        global_data[
+            "market_change"
+        ] is not None
+    ):
+
+        global_adjustment = (
+            global_data[
+                "market_change"
+            ] * 1.5
+        )
+
+        global_adjustment = max(
+            -6,
+            min(
+                6,
+                global_adjustment
+            )
+        )
+
+        score += global_adjustment
+
+    # --------------------------------------------------------
+    # PROBABILIDADES
+    # --------------------------------------------------------
+
+    probability_up = clamp(
+        50 + score
+    )
+
+    probability_down = (
+        100
+        - probability_up
+    )
+
+    confidence = clamp(
+        50 + abs(score) * 1.2,
+        50,
+        92
+    )
+
+    return {
+
+        "sol": sol,
+
+        "btc": btc,
+
+        "eth": eth,
+
+        "technical_score":
+            technical_score_value,
+
+        "technical":
+            technical_data,
+
+        "fear":
+            fear_value,
+
+        "fear_label":
+            fear_label,
+
+        "global":
+            global_data,
+
+        "news":
+            all_news[:40],
+
+        "news_score":
+            news_score,
+
+        "score":
+            score,
+
+        "up":
+            probability_up,
+
+        "down":
+            probability_down,
+
+        "confidence":
+            confidence,
+
+        "timestamp":
+            datetime.now(
+                timezone.utc
+            ).strftime(
+                "%Y-%m-%d %H:%M UTC"
+            )
+    }
+
+
+# ============================================================
+# SIDEBAR
+# ============================================================
+
+st.sidebar.markdown(
+    "# ⚙️ CONTROL CENTER"
+)
+
+refresh_seconds = st.sidebar.slider(
+    "Intervalo de actualización",
+    30,
+    300,
+    90,
+    10
+)
+
+if st.sidebar.button(
+    "🔄 ACTUALIZAR AHORA"
+):
+
+    st.cache_data.clear()
+
+    st.rerun()
+
+
+st.sidebar.markdown("---")
+
+st.sidebar.markdown(
+    """
+### Fuentes utilizadas
+
+🟣 Binance  
+🌐 Google News  
+😱 Fear & Greed  
+🌍 CoinGecko  
+📊 Indicadores técnicos  
+
+El radar combina estas señales para generar
+un escenario probabilístico para SOL.
+"""
+)
+
+
+# ============================================================
+# EJECUTAR RADAR
+# =====
